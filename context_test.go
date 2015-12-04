@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	"github.com/zenazn/goji/web/mutil"
 )
 
 type (
@@ -32,7 +34,16 @@ type (
 		headers map[string]string
 		body    io.Reader
 	}
+
+	multiResponseWriter struct {
+		http.ResponseWriter
+		b *bytes.Buffer
+	}
 )
+
+func (mrw multiResponseWriter) Write(p []byte) (int, error) {
+	return mrw.b.Write(p)
+}
 
 func TestContext(t *testing.T) {
 	rw, expected := httptest.NewRecorder(), httptest.NewRecorder()
@@ -72,6 +83,78 @@ func TestContext(t *testing.T) {
 	if !reflect.DeepEqual(err, Exception(c)) {
 		t.Error("TestContext: Expected exceptions to be equal")
 	}
+}
+
+func TestDefer(t *testing.T) {
+	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/", nil)
+	e := New(&dummyRouter{})
+	str := ""
+	var deferrer = func(name string) HandlerFunc {
+		return func(ctx *Context) {
+			ctx.Defer(func() {
+				str += name
+			})
+
+			ctx.Write([]byte(name))
+
+			ctx.Next()
+		}
+	}
+
+	c := e.NewContext(rec, r, mw1, deferrer("defer1"), deferrer("defer2"), mw1)
+	c.Next()
+
+	expected.Write([]byte("mw1defer1defer2mw1"))
+	if !reflect.DeepEqual(expected.Body, rec.Body) {
+		t.Errorf("TestDefer error: Expected %q, given %q", expected.Body, rec.Body)
+	}
+
+	if str != "" {
+		t.Errorf("TestDefer: Expected defer not to run until context is returned.")
+	}
+
+	e.ReturnContext(c)
+
+	// Defer should run in LIFO Order
+	if str != "defer2defer1" {
+		t.Error("TestDefer: Expected defers to run in proper order")
+	}
+}
+
+func TestOnBeforeWrite(t *testing.T) {
+	rec := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/", nil)
+	e := New(&dummyRouter{})
+	var conditionalWriter = func(c *Context) {
+		c.BeforeWrite(func() {
+			c.ResponseWriter = mutil.WrapWriter(c.ResponseWriter)
+		})
+
+		c.Next()
+	}
+
+	var mwstatus = func(c *Context) {
+		c.WriteHeader(http.StatusExpectationFailed)
+	}
+
+	c := e.NewContext(rec, r, conditionalWriter, mwstatus)
+	if _, ok := c.ResponseWriter.(mutil.WriterProxy); ok {
+		t.Error("TestOnBeforeWrite: Expected initial response writer would not be mutil.WriterProxy")
+	}
+
+	c.Next()
+
+	mw, ok := c.ResponseWriter.(mutil.WriterProxy)
+	if !ok {
+		t.Errorf("TestOnBeforeWrite: Expected before write to run")
+	}
+
+	if mw.Status() != http.StatusExpectationFailed {
+		t.Errorf("TestOnBeforeWrite: Expected to capture status of %d, given %d", http.StatusExpectationFailed, mw.Status())
+	}
+
+	e.ReturnContext(c)
 }
 
 // func TestContextEventsCacheHit(t *testing.T) {

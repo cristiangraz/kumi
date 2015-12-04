@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"io"
-	"mime"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,31 +27,22 @@ const (
 	encGzip
 )
 
+// CompressibleExtensions are the html extensions to compress.
 var (
 	gzipWriterPools = map[int]*sync.Pool{}
 
-	// CompressibleContentTypes is a list of content types that the compressor
-	// will compress. The list is taken from the article found at
-	// https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-to-compress
-	CompressibleContentTypes = map[string]struct{}{
-		"text/html":                     {},
-		"application/x-javascript":      {},
-		"text/css":                      {},
-		"application/javascript":        {},
-		"text/javascript":               {},
-		"text/plain":                    {},
-		"text/xml":                      {},
-		"application/json":              {},
-		"application/vnd.ms-fontobject": {},
-		"application/x-font-opentype":   {},
-		"application/x-font-truetype":   {},
-		"application/x-font-ttf":        {},
-		"application/xml":               {},
-		"font/eot":                      {},
-		"font/opentype":                 {},
-		"font/otf":                      {},
-		"image/svg+xml":                 {},
-		"image/vnd.microsoft.icon":      {},
+	rxExtension = regexp.MustCompile(`\.((?:min\.)?[a-zA-Z]{2,4})$`)
+
+	CompressibleExtensions = map[string]struct{}{
+		"html":    {},
+		"js":      {},
+		"min.js":  {},
+		"css":     {},
+		"min.css": {},
+		"txt":     {},
+		"xml":     {},
+		"json":    {},
+		"svg":     {},
 	}
 
 	acceptEncoding  = "Accept-Encoding"
@@ -87,8 +78,6 @@ func CompressorLevel(level int) kumi.HandlerFunc {
 	}
 
 	return func(c *kumi.Context) {
-		c.Header().Set("Vary", "Accept-Encoding")
-
 		// check client's accepted encodings
 		encs := acceptedEncodings(c.Request)
 		if len(encs) == 0 {
@@ -98,45 +87,77 @@ func CompressorLevel(level int) kumi.HandlerFunc {
 
 		if encs[0] != encGzip {
 			c.Next()
+
 			return
+		}
+
+		// Don't double-encode
+		if strings.Contains(c.Header().Get("Content-Encoding"), "gzip") {
+			c.Next()
+			return
+		}
+
+		// If there is a file extension and it doesn't match compressible
+		// extensions, skip
+		exts := rxExtension.FindStringSubmatch(c.Request.URL.Path)
+		if len(exts) == 1 {
+			ext := exts[0]
+			if _, ok := CompressibleExtensions[ext]; !ok {
+				c.Next()
+				return
+			}
 		}
 
 		// cannot accept Range requests for possibly gzipped responses
 		c.Request.Header.Del("Range")
-		c.BeforeWrite(func() {
-			if isResponseCompressible(c.Header()) {
-				setCompressionHeaders(c.Header())
 
-				gzw := gzipWriterPools[level].Get().(*gzip.Writer)
-				gzw.Reset(c.ResponseWriter)
+		c.Header().Set("Vary", "Accept-Encoding")
+		setCompressionHeaders(c.Header())
 
-				c.ResponseWriter = &gzipResponseWriter{c.ResponseWriter, gzw}
+		gzw := gzipWriterPools[level].Get().(*gzip.Writer)
+		gzw.Reset(c.ResponseWriter)
 
-				c.Defer(func() {
-					gzw.Close()
-					gzipWriterPools[level].Put(gzw)
-				})
-			}
-		})
+		c.ResponseWriter = &gzipResponseWriter{c.ResponseWriter, gzw}
 
 		c.Next()
+
+		gzw.Close()
+		gzipWriterPools[level].Put(gzw)
 	}
 }
 
-// IsResponseCompressible returns true if the response has a Content-Type
-// found in the CompressibleContentTypes map.
-func isResponseCompressible(h http.Header) bool {
-	ct := h.Get("Content-Type")
-	mt, _, err := mime.ParseMediaType(ct)
-	if err != nil {
+// Compress ...
+func Compress(r io.Reader, w io.Writer) {
+	level := gzip.DefaultCompression
+
+	gzw := gzipWriterPools[level].Get().(*gzip.Writer)
+	gzw.Reset(w)
+
+	io.Copy(gzw, r)
+
+	gzw.Close()
+	gzipWriterPools[level].Put(gzw)
+}
+
+// Decompress ...
+func Decompress(r io.Reader, w io.Writer) {
+	gzr, _ := gzip.NewReader(r)
+	io.Copy(w, gzr)
+	gzr.Close()
+}
+
+// AcceptsEncoding ...
+func AcceptsEncoding(r *http.Request) bool {
+	encs := acceptedEncodings(r)
+	if len(encs) == 0 {
 		return false
 	}
 
-	if _, ok := CompressibleContentTypes[mt]; ok {
-		return true
+	if encs[0] != encGzip {
+		return false
 	}
 
-	return false
+	return true
 }
 
 // SetHeaders sets gzip headers.

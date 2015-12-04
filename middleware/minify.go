@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"io"
-	"log"
+	"mime"
 	"net/http"
 	"strings"
 
@@ -36,33 +36,40 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 		allowed[t] = struct{}{}
 	}
 
-	return func(c *kumi.Context) {
-		m := minify.New()
-		m.AddFunc("text/css", css.Minify)
-		m.AddFunc("text/html", html.Minify)
-		m.AddFunc("text/javascript", js.Minify)
-		m.AddFunc("application/json", json.Minify)
-		m.AddFunc("text/xml", xml.Minify)
+	m := minify.New()
+	m.AddFunc("text/css", css.Minify)
+	m.AddFunc("text/html", html.Minify)
+	m.AddFunc("text/javascript", js.Minify)
+	m.AddFunc("application/json", json.Minify)
+	m.AddFunc("text/xml", xml.Minify)
 
-		// @todo sync pool
+	// @todo sync pool
+	return func(c *kumi.Context) {
 		c.BeforeWrite(func() {
 			noTransform := c.Header().Get("Cache-Control")
 			if noTransform != "" && strings.Contains(noTransform, "no-transform") {
 				return
 			}
 
-			contentType := strings.SplitAfterN(c.Header().Get("Content-Type"), ";", 2)[0]
-			contentType = strings.Replace(contentType, ";", "", 1)
-			if _, ok := allowed[contentType]; !ok {
+			if c.Header().Get("Content-Type") == "" {
+				return
+			}
+
+			ct, _, err := mime.ParseMediaType(c.Header().Get("Content-Type"))
+			if err != nil {
+				return
+			}
+
+			if _, ok := allowed[ct]; !ok {
 				return
 			}
 
 			pr, pw := io.Pipe()
 			go func(w io.Writer) {
-				if err := m.Minify(contentType, w, pr); err != nil {
+				defer pr.Close()
+				if err := m.Minify(ct, w, pr); err != nil {
 					panic(err)
 				}
-				log.Println("minified")
 			}(c.ResponseWriter)
 
 			c.ResponseWriter = minifyResponseWriter{c.ResponseWriter, pw}
@@ -71,3 +78,6 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 		c.Next()
 	}
 }
+
+// MinifyExtension creates a minifier that only minifies matching extensions
+// func MinifyExtension(extensions ...string) kumi.HandlerFunc {}

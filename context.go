@@ -1,7 +1,6 @@
 package kumi
 
 import (
-	"io"
 	"net/http"
 	"sync"
 
@@ -26,9 +25,6 @@ type (
 		writeHeader sync.Once
 		handlers    []HandlerFunc
 		status      int
-
-		// @todo buffer response body here for caching
-		body io.ReadWriter
 	}
 
 	key int
@@ -66,6 +62,10 @@ func (c *Context) WriteHeader(s int) {
 			fn()
 		}
 
+		if c.Header().Get("Content-Type") == "" {
+			c.Header().Set("Content-Type", "text/plain")
+		}
+
 		c.ResponseWriter.WriteHeader(s)
 	})
 }
@@ -80,14 +80,19 @@ func (c *Context) Write(p []byte) (int, error) {
 // middleware except the last http handler. If you don't call it from your handler,
 // no additional handlers will be called.
 func (c *Context) Next() {
-	if len(c.handlers) == 0 {
+	select {
+	case <-c.Context.Done():
 		return
+	default:
+		if len(c.handlers) == 0 {
+			return
+		}
+
+		h := c.handlers[0:1][0]
+		c.handlers = c.handlers[1:]
+
+		h(c)
 	}
-
-	h := c.handlers[0:1][0]
-	c.handlers = c.handlers[1:]
-
-	h(c)
 }
 
 // ServeHTTP makes context compatible with the http.Handler interface.
@@ -143,7 +148,6 @@ func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...Han
 	c.status = 0
 	c.deferred = []func(){}
 	c.beforeWrite = []func(){}
-	c.body = nil
 }
 
 // NewContextWithException adds an exception to the context.

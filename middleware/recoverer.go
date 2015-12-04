@@ -13,7 +13,7 @@ func Recoverer(c *kumi.Context) {
 		if err := recover(); err != nil {
 			debug.PrintStack()
 			kumi.NewContextWithException(c, err)
-			http.Error(c, http.StatusText(500), 500)
+			http.Error(c, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 	}()
 

@@ -6,10 +6,8 @@ import (
 )
 
 // AppEngine sets up the context for use with app engine.
-func AppEngine() kumi.HandlerFunc {
-	return func(c *kumi.Context) {
-		c.Context = appengine.WithContext(c.Context, c.Request)
+func AppEngine(c *kumi.Context) {
+	c.Context = appengine.WithContext(c.Context, c.Request)
 
-		c.Next()
-	}
+	c.Next()
 }

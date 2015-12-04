@@ -26,9 +26,9 @@ func NewGorillaMuxRouter() *GorillaMuxRouter {
 }
 
 // Handle ...
-func (gorilla GorillaMuxRouter) Handle(method string, path string, h ...kumi.HandlerFunc) {
-	gorilla.Router.HandleFunc(path, func(rw http.ResponseWriter, r *http.Request) {
-		e := gorilla.Engine()
+func (router GorillaMuxRouter) Handle(method string, path string, h ...kumi.HandlerFunc) {
+	router.Router.HandleFunc(path, func(rw http.ResponseWriter, r *http.Request) {
+		e := router.Engine()
 		c := e.NewContext(rw, r, h...)
 		defer e.ReturnContext(c)
 
@@ -41,16 +41,27 @@ func (gorilla GorillaMuxRouter) Handle(method string, path string, h ...kumi.Han
 }
 
 // SetEngine sets the kumi engine on the router.
-func (gorilla *GorillaMuxRouter) SetEngine(e *kumi.Engine) {
-	gorilla.engine = e
+func (router *GorillaMuxRouter) SetEngine(e *kumi.Engine) {
+	router.engine = e
 }
 
 // Engine retrieves the kumi engine.
-func (gorilla GorillaMuxRouter) Engine() *kumi.Engine {
-	return gorilla.engine
+func (router GorillaMuxRouter) Engine() *kumi.Engine {
+	return router.engine
 }
 
 // ServeHTTP ...
-func (gorilla GorillaMuxRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	gorilla.Router.ServeHTTP(rw, r)
+func (router GorillaMuxRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	router.Router.ServeHTTP(rw, r)
+}
+
+// NotFoundHandler ...
+func (router GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
+	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		e := router.Engine()
+		c := e.NewContext(rw, r, h...)
+		defer e.ReturnContext(c)
+
+		c.Next()
+	})
 }

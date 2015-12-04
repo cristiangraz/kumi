@@ -45,17 +45,23 @@ func (q Query) GetBool(name string) (bool, error) {
 }
 
 // Sort returns the query string sorted with empty values removed.
-func (q Query) Sort() (keys []string, values []string) {
-	m := make(map[string]string)
+func (q *Query) Sort() url.Values {
+	var keys []string
+	sorted := url.Values{}
+	m := make(map[string]string, len(q.request.URL.Query()))
 	for k, v := range q.request.URL.Query() {
+		if v[0] == "" {
+			continue
+		}
+
 		keys = append(keys, k)
 		m[k] = v[0]
 	}
 
 	sort.Strings(keys)
 	for _, k := range keys {
-		values = append(values, m[k])
+		sorted.Add(k, m[k])
 	}
 
-	return keys, values
+	return sorted
 }

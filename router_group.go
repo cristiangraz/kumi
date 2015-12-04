@@ -9,6 +9,7 @@ type (
 		ServeHTTP(http.ResponseWriter, *http.Request)
 		SetEngine(*Engine)
 		Engine() *Engine
+		NotFoundHandler(...HandlerFunc)
 	}
 
 	// RouterGroup allows for grouping routes by a base pattern (path) and shared middleware.
@@ -86,6 +87,16 @@ func (g RouterGroup) All(pattern string, handlers ...Handler) {
 	for _, method := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"} {
 		g.handle(method, pattern, handlers...)
 	}
+}
+
+// NotFoundHandler ...
+func (g RouterGroup) NotFoundHandler(handlers ...Handler) {
+	wrapped, err := wrapHandlers(handlers...)
+	if err != nil {
+		panic(err)
+	}
+
+	g.router.NotFoundHandler(appendHandlers(g.Handlers, wrapped...)...)
 }
 
 // handle consolidates all of the middleware into a route that satisfies the

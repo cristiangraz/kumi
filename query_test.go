@@ -99,3 +99,28 @@ func TestQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestSort(t *testing.T) {
+	suite := []struct {
+		input string
+		want  string
+	}{
+		{input: "a=4&b=&c=10", want: "a=4&c=10"},
+		{input: "b=4&a=&d=&c=10&aa=a", want: "aa=a&b=4&c=10"},
+		{input: "zed=40&alan=30&sam=32&miChaEl=31", want: "alan=30&miChaEl=31&sam=32&zed=40"},
+	}
+
+	for _, s := range suite {
+		r, _ := http.NewRequest("GET", "/?"+s.input, nil)
+
+		q := &Query{r}
+		given, err := url.QueryUnescape(q.Sort().Encode())
+		if err != nil {
+			t.Errorf("TestSort: Error unescaping. Err: %s", err)
+		}
+
+		if given != s.want {
+			t.Errorf("Invalid sort. Expected %q, given %q", s.want, given)
+		}
+	}
+}

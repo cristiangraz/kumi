@@ -97,14 +97,19 @@ func (e *Engine) Serve(servers ...*http.Server) error {
 // prep breaks out all of the steps of Serve except actually calling
 // gracehttp.Serve so we can test.
 func (e *Engine) prep(servers ...*http.Server) {
+	hasHandler := true
 	for _, s := range servers {
 		if s.TLSConfig != nil {
 			http2.ConfigureServer(s, nil)
 		}
 
 		if s.Handler == nil {
-			http.Handle("/", e.router)
+			hasHandler = false
 			s.Handler = http.DefaultServeMux
 		}
+	}
+
+	if !hasHandler {
+		http.Handle("/", e.router)
 	}
 }

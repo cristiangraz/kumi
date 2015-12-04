@@ -54,3 +54,14 @@ func (router HTTPTreeMux) Engine() *kumi.Engine {
 func (router HTTPTreeMux) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	router.Router.ServeHTTP(rw, r)
 }
+
+// NotFoundHandler ...
+func (router *HTTPTreeMux) NotFoundHandler(h ...kumi.HandlerFunc) {
+	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		e := router.Engine()
+		c := e.NewContext(rw, r, h...)
+		defer e.ReturnContext(c)
+
+		c.Next()
+	})
+}
