@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"strings"
@@ -66,6 +67,11 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 
 			pr, pw := io.Pipe()
 			go func(w io.Writer) {
+				defer func() {
+					if err := recover(); err != nil {
+						log.Printf("Error minifying file: %q: Err: %s", c.Request.URL.String(), err)
+					}
+				}()
 				defer pr.Close()
 				if err := m.Minify(ct, w, pr); err != nil {
 					panic(err)
