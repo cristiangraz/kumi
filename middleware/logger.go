@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cristiangraz/kumi"
+	"github.com/mssola/user_agent"
 	"github.com/whitedevops/colors"
 )
 
@@ -25,7 +26,7 @@ func Logger(c *kumi.Context) {
 	path := c.Request.URL.String()
 	status := c.Status()
 
-	log.Printf("%s   %s   %s  %s", logDuration(start), logStatus(status), logMethod(c.Request.Method), logPath(path))
+	log.Printf("%s   %s   %s  %s  %s", logDuration(start), logStatus(status), logMethod(c.Request.Method), logPath(path), logUserAgent(c.Request.UserAgent()))
 }
 
 func logDuration(start time.Time) string {
@@ -68,4 +69,15 @@ func logMethod(method string) string {
 
 func logPath(path string) string {
 	return fmt.Sprintf("%s%s%s%s", colors.ResetAll, colors.Dim, path, colors.ResetAll)
+}
+
+func logUserAgent(agent string) string {
+	ua := user_agent.New(agent)
+
+	browser, version := ua.Browser()
+	if ua.Bot() {
+		return fmt.Sprintf("%s %s%s%s %s%s BOT %s", browser, colors.ResetAll, colors.Dim, version, colors.ResetAll, colors.White+colors.BackgroundRed, colors.ResetAll)
+	}
+
+	return fmt.Sprintf("%s %s%s%s%s", browser, colors.ResetAll, colors.Dim, version, colors.ResetAll)
 }
