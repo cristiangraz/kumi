@@ -3,6 +3,7 @@ package kumi
 import (
 	"crypto/tls"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/facebookgo/grace/gracehttp"
@@ -42,6 +43,7 @@ func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ..
 	c.engine = e
 
 	// Set URL host and scheme
+	r.Host = strings.ToLower(r.Host)
 	r.URL.Host = r.Host
 	r.URL.Scheme = "http"
 	if r.TLS != nil {
