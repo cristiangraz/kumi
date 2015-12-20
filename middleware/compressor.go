@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"regexp"
@@ -9,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/cristiangraz/kumi"
-	"github.com/klauspost/compress/gzip"
 )
 
 type (
