@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"io"
-	"log"
 	"mime"
 	"net/http"
 	"strings"
@@ -19,12 +18,12 @@ import (
 type (
 	minifyResponseWriter struct {
 		http.ResponseWriter
-		io.Writer
+		io.WriteCloser
 	}
 )
 
 func (m minifyResponseWriter) Write(b []byte) (int, error) {
-	return m.Writer.Write(b)
+	return m.WriteCloser.Write(b)
 }
 
 // Minify returns minify middleware that will minify css, html, javascript, and json
@@ -44,7 +43,6 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 	m.AddFunc("application/json", json.Minify)
 	m.AddFunc("text/xml", xml.Minify)
 
-	// @todo sync pool
 	return func(c *kumi.Context) {
 		c.BeforeWrite(func() {
 			noTransform := c.Header().Get("Cache-Control")
@@ -65,20 +63,8 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 				return
 			}
 
-			pr, pw := io.Pipe()
-			go func(w io.Writer) {
-				defer func() {
-					if err := recover(); err != nil {
-						log.Printf("Error minifying file: %q: Err: %s", c.Request.URL.String(), err)
-					}
-				}()
-				defer pr.Close()
-				if err := m.Minify(ct, w, pr); err != nil {
-					panic(err)
-				}
-			}(c.ResponseWriter)
-
-			c.ResponseWriter = minifyResponseWriter{c.ResponseWriter, pw}
+			mw := m.Writer(ct, c.ResponseWriter)
+			c.ResponseWriter = minifyResponseWriter{c.ResponseWriter, mw}
 		})
 
 		c.Next()
