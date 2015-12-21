@@ -146,7 +146,6 @@ func (h *Headers) Add(header http.Header) {
 // If http.Header has Cache-Control headers set, those will take precedence over anything
 // in Headers. Follow's Symfony's guidelines for defaults:
 // http://symfony.com/doc/current/book/http_cache.html#caching-rules-and-defaults
-// @todo support 301 headers as cacheable
 func (h *Headers) SensibleDefaults(header http.Header, status int) {
 	cch := NewHeadersString(header.Get("Cache-Control"))
 	if cch.IsEmpty() {
