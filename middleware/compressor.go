@@ -62,7 +62,7 @@ func init() {
 }
 
 // Write writes to the gzip response writer if the response is compressible.
-func (gzw *gzipResponseWriter) Write(p []byte) (int, error) {
+func (gzw gzipResponseWriter) Write(p []byte) (int, error) {
 	return gzw.writer.Write(p)
 }
 
@@ -116,13 +116,14 @@ func CompressorLevel(level int) kumi.HandlerFunc {
 
 		gzw := gzipWriterPools[level].Get().(*gzip.Writer)
 		gzw.Reset(c.ResponseWriter)
+		defer func() {
+			gzw.Close()
+			gzipWriterPools[level].Put(gzw)
+		}()
 
-		c.ResponseWriter = &gzipResponseWriter{c.ResponseWriter, gzw}
+		c.ResponseWriter = gzipResponseWriter{c.ResponseWriter, gzw}
 
 		c.Next()
-
-		gzw.Close()
-		gzipWriterPools[level].Put(gzw)
 	}
 }
 
