@@ -64,6 +64,10 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 			}
 
 			mw := m.Writer(ct, c.ResponseWriter)
+			c.Defer(func() {
+				mw.Close()
+			})
+
 			c.ResponseWriter = minifyResponseWriter{c.ResponseWriter, mw}
 		})
 
