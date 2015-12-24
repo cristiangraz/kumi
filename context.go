@@ -19,8 +19,6 @@ type (
 		Query        Query
 		Params       Params
 
-		deferred    []func()
-		beforeWrite []func()
 		engine      *Engine
 		writeHeader sync.Once
 		handlers    []HandlerFunc
@@ -56,11 +54,6 @@ func (c *Context) WriteHeader(s int) {
 	c.writeHeader.Do(func() {
 		c.status = s
 		c.CacheHeaders.SensibleDefaults(c.Header(), c.Status())
-
-		// Run any callbacks
-		for _, fn := range c.beforeWrite {
-			fn()
-		}
 
 		if c.Header().Get("Content-Type") == "" {
 			c.Header().Set("Content-Type", "text/plain")
@@ -100,22 +93,6 @@ func (c *Context) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	c.Next()
 }
 
-// Defer registers defer handlers in LIFO order.
-// This works similar to Go's built in defer, but occurs when the
-// context is about to be reset rather than when the function
-// closes. This is useful for wrapping the response writer
-// and closing the writer in the proper order.
-func (c *Context) Defer(fn func()) {
-	c.deferred = append([]func(){fn}, c.deferred...)
-}
-
-// BeforeWrite adds a function to be executed in FIFO order
-// just before WriteHeader is called on http.ResponseWriter.
-// Useful for conditional writers.
-func (c *Context) BeforeWrite(fn func()) {
-	c.beforeWrite = append(c.beforeWrite, fn)
-}
-
 // newContext creates a new context for the sync pool.
 func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
 	return &Context{
@@ -128,8 +105,6 @@ func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc
 
 		writeHeader: sync.Once{},
 		status:      0,
-		deferred:    []func(){},
-		beforeWrite: []func(){},
 	}
 }
 
@@ -146,8 +121,6 @@ func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...Han
 	c.engine = nil
 	c.writeHeader = sync.Once{}
 	c.status = 0
-	c.deferred = []func(){}
-	c.beforeWrite = []func(){}
 }
 
 // NewContextWithException adds an exception to the context.

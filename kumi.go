@@ -58,10 +58,6 @@ func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ..
 // by each of the router implementations and should only be used if you are
 // integrating a route with Kumi.
 func (e *Engine) ReturnContext(c *Context) {
-	for _, fn := range c.deferred {
-		fn()
-	}
-
 	e.pool.Put(c)
 }
 

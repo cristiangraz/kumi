@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/cristiangraz/kumi"
 	"github.com/tdewolff/minify"
@@ -16,18 +18,85 @@ import (
 )
 
 type (
+	// minifyResponseWriter provides a response writer for minification.
 	minifyResponseWriter struct {
 		http.ResponseWriter
 		io.WriteCloser
+		minifier    *minify.M
+		allowed     map[string]struct{}
+		initialized bool
 	}
 )
 
-func (m minifyResponseWriter) Write(b []byte) (int, error) {
+var (
+	minifyResponseWriterPool = &sync.Pool{
+		New: func() interface{} {
+			return &minifyResponseWriter{}
+		},
+	}
+)
+
+// reset the response writer pulled from the pool
+func (m *minifyResponseWriter) reset(w http.ResponseWriter, minifier *minify.M, allowed map[string]struct{}) {
+	m.ResponseWriter = w
+	m.minifier = minifier
+	m.allowed = allowed
+	m.WriteCloser = nil
+	m.initialized = false
+}
+
+// Write defers to the initializer on first run to
+// see if the content should be minified or not.
+func (m *minifyResponseWriter) Write(b []byte) (int, error) {
+	if !m.initialized {
+		m.initialize()
+	}
+
+	if m.WriteCloser == nil {
+		return m.ResponseWriter.Write(b)
+	}
+
 	return m.WriteCloser.Write(b)
 }
 
-// Minify returns minify middleware that will minify css, html, javascript, and json
-var Minify = MinifyTypes("text/css", "text/html", "text/javascript", "application/json", "text/xml")
+// initialize checks for a valid content-type in the allowed list of
+// content types and initializes the correct minifier if found.
+// If the response has a no-transform value in Cache-Control,
+// nothing is minified.
+func (m *minifyResponseWriter) initialize() {
+	m.initialized = true
+	hdr := m.ResponseWriter.Header()
+
+	cc := hdr.Get("Cache-Control")
+	if strings.Contains(cc, "no-transform") {
+		return
+	}
+
+	ct, _, err := mime.ParseMediaType(hdr.Get("Content-Type"))
+	if err != nil {
+		return
+	}
+
+	if _, ok := m.allowed[ct]; !ok {
+		return
+	}
+
+	m.WriteCloser = m.minifier.Writer(ct, m.ResponseWriter)
+}
+
+// closes the minifier.
+func (m *minifyResponseWriter) close() {
+	if m.WriteCloser == nil {
+		return
+	}
+
+	if err := m.WriteCloser.Close(); err != nil {
+		log.Println("Minification Error: Err:", err)
+	}
+}
+
+// Minify returns minify middleware that will minify css, javascript, and json
+var Minify = MinifyTypes("text/css", "text/javascript", "application/json", "text/xml")
 
 // MinifyTypes returns a custom minifier.
 func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
@@ -44,36 +113,15 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 	m.AddFunc("text/xml", xml.Minify)
 
 	return func(c *kumi.Context) {
-		c.BeforeWrite(func() {
-			noTransform := c.Header().Get("Cache-Control")
-			if noTransform != "" && strings.Contains(noTransform, "no-transform") {
-				return
-			}
+		mrw := minifyResponseWriterPool.Get().(*minifyResponseWriter)
+		mrw.reset(c.ResponseWriter, m, allowed)
 
-			if c.Header().Get("Content-Type") == "" {
-				return
-			}
-
-			ct, _, err := mime.ParseMediaType(c.Header().Get("Content-Type"))
-			if err != nil {
-				return
-			}
-
-			if _, ok := allowed[ct]; !ok {
-				return
-			}
-
-			mw := m.Writer(ct, c.ResponseWriter)
-			c.Defer(func() {
-				mw.Close()
-			})
-
-			c.ResponseWriter = minifyResponseWriter{c.ResponseWriter, mw}
-		})
+		c.ResponseWriter = mrw
+		defer func() {
+			mrw.close()
+			minifyResponseWriterPool.Put(mrw)
+		}()
 
 		c.Next()
 	}
 }
-
-// MinifyExtension creates a minifier that only minifies matching extensions
-// func MinifyExtension(extensions ...string) kumi.HandlerFunc {}
