@@ -130,6 +130,24 @@ func TestRouterGroup(t *testing.T) {
 	}
 }
 
+func TestRouterGroupGETCreatedHEAD(t *testing.T) {
+	router := &dummyRouter{}
+	k := New(router)
+
+	handlers := []Handler{h2}
+	k.Get("/hello", handlers...)
+
+	_, ok := router.Lookup("GET", "/hello")
+	if !ok {
+		t.Errorf("TestRouterGroupGETCreatedHEAD: Expected GET route to be found")
+	}
+
+	_, ok = router.Lookup("HEAD", "/hello")
+	if !ok {
+		t.Errorf("TestRouterGroupGETCreatedHEAD: Expected HEAD route to be found")
+	}
+}
+
 func TestRouterGroupAll(t *testing.T) {
 	router := &dummyRouter{}
 	k := New(router)

@@ -17,6 +17,12 @@ type (
 		Address string
 		pool    sync.Pool
 	}
+
+	// BodylessResponseWriter wraps http.ResponseWriter, discarding
+	// anything written to the body.
+	BodylessResponseWriter struct {
+		http.ResponseWriter
+	}
 )
 
 // New creates a new Engine using the given Router.
@@ -38,6 +44,10 @@ func New(r Router) *Engine {
 
 // NewContext retrieves a context from the pool and sets it for the request.
 func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
+	if r.Method == "HEAD" {
+		rw = BodylessResponseWriter{rw}
+	}
+
 	c := e.pool.Get().(*Context)
 	c.reset(rw, r, handlers...)
 	c.engine = e
@@ -90,6 +100,10 @@ func (e *Engine) Serve(servers ...*http.Server) error {
 	e.prep(servers...)
 
 	return gracehttp.Serve(servers...)
+}
+
+func (brw BodylessResponseWriter) Write(b []byte) (int, error) {
+	return len(b), nil
 }
 
 // prep breaks out all of the steps of Serve except actually calling

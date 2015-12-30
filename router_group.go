@@ -47,8 +47,11 @@ func (g *RouterGroup) Use(handlers ...Handler) {
 }
 
 // Get defines an HTTP GET endpoint with one or more handlers.
+// It will also register a HEAD endpoint. Kumi will automatically
+// use a bodyless response writer.
 func (g RouterGroup) Get(pattern string, handlers ...Handler) {
 	g.handle("GET", pattern, handlers...)
+	g.handle("HEAD", pattern, handlers...)
 }
 
 // Post defines an HTTP POST endpoint with one or more handlers.
