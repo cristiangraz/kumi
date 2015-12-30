@@ -19,7 +19,7 @@ type (
 
 // Validate takes schema errors and mapping rules and returns an array of APIError structs
 func Validate(errors []gojsonschema.ResultError, rules Rules) []Error {
-	e := make([]Error, 0, len(errors))
+	var e []Error
 	for _, err := range errors {
 		field, errType := err.Field(), err.Type()
 		r, ok := rules[field]

@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/xml"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -22,23 +21,14 @@ type (
 		// Errors only
 		Code string `json:"code,omitempty" xml:"code,omitempty"`
 
-		// Holds contextual information about the response
-		// Errors only
-		// Note for XML: If errors are present, they'll be rendered in the XMLFormatter
-		// with an alias type. This is needed for inconsistencies between with and
-		// without context info.
-		Errors []Error `json:"errors,omitempty" xml:"_"`
+		// Holds errors.
+		Errors *[]Error `json:"errors,omitempty" xml:"errors>error,omitempty"`
 
 		// Data holds the data specific to the request
 		Result interface{} `json:"result,omitempty" xml:"result,omitempty"`
 
 		// Pagination info
 		Pagination *Paging `json:"paging,omitempty" xml:"paging,omitempty"`
-	}
-
-	// ResponseFormatter allows for formatting how the Response is sent.
-	ResponseFormatter interface {
-		Send(Response, io.Writer) error
 	}
 
 	// Paging holds pagination information for the response
@@ -64,13 +54,9 @@ type (
 	}
 )
 
-var (
-	// Formatter holds the ResponseFormatter to use.
-	// The JSONFormatter is used by default and configured to display context_info.
-	Formatter ResponseFormatter = JSONFormatter{
-		UseContextInfo: true,
-	}
-)
+// Formatter holds the ResponseFormatter to use.
+// The JSONFormatter is used by default and configured to display context_info.
+var Formatter = JSONFormatter
 
 // Success creates a new successful response.
 func Success(result interface{}) Response {
@@ -93,7 +79,7 @@ func ErrorResponse(statusCode int, errors ...Error) Response {
 		Success: false,
 		Status:  statusCode,
 		Code:    code,
-		Errors:  errors,
+		Errors:  &errors,
 	}
 }
 
@@ -104,6 +90,6 @@ func (r Response) Paging(p Paging) Response {
 }
 
 // Send passes the response off to the formatter and writes it.
-func (r Response) Send(w io.Writer) error {
-	return Formatter.Send(r, w)
+func (r Response) Send(w http.ResponseWriter) error {
+	return Formatter(r, w)
 }
