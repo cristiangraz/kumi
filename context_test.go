@@ -3,8 +3,6 @@ package kumi
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -12,25 +10,9 @@ import (
 )
 
 type (
-	fakeCacher struct {
-		Cacher
-	}
-
-	alwaysFoundCacher struct {
-		Cacher
-	}
-
 	dummyRouter struct {
 		engine *Engine
 		routes map[string]map[string][]HandlerFunc
-	}
-
-	// response responds to cache Check
-	cacheResponse struct {
-		found   bool
-		status  int
-		headers map[string]string
-		body    io.Reader
 	}
 
 	multiResponseWriter struct {
@@ -83,70 +65,6 @@ func TestContext(t *testing.T) {
 	}
 }
 
-// func TestContextEventsCacheHit(t *testing.T) {
-// 	finishRequest := false
-// 	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
-// 	r, _ := http.NewRequest("GET", "/", nil)
-//
-// 	wrap := func(event string) HandlerFunc {
-// 		return func(ctx *Context) {
-// 			// EventFinishRequest happens after response has been sent.
-// 			// Nothing will be written, so need a way to verify it ran.
-// 			if event == EventFinishRequest {
-// 				finishRequest = true
-// 			}
-//
-// 			ctx.Writer().Write([]byte(event))
-// 		}
-// 	}
-//
-// 	e := New(&dummyRouter{})
-// 	e.SetCacher(&alwaysFoundCacher{})
-// 	e.SetCompressor(&fakeCompressor{})
-//
-// 	c := e.NewContext(rec, r, mw1)
-//
-// 	for _, event := range []string{EventRequestStart, EventFinishRequest, EventResponse} {
-// 		if err := e.AddListener(event, wrap(event)); err != nil {
-// 			t.Errorf("TestContextEventsCacheHit: Error adding event listener. Error: %s", err)
-// 		}
-// 	}
-//
-// 	c.Start(e)
-// 	e.ReturnContext(c)
-//
-// 	// On Cache HITs:
-// 	// (E) Request starts, cache is checked, (E) before send response, send response, (E) finish request
-// 	expected.Write([]byte(fmt.Sprint(EventRequestStart, "cache HIT", EventResponse, "mw1")))
-// 	if !reflect.DeepEqual(expected.Body, rec.Body) {
-// 		t.Errorf("TestContextEventsCacheHit: Expected %s, given %s", expected.Body, rec.Body)
-// 	}
-//
-// 	if rec.Header().Get("X-Compressor-Fake") != "Running" {
-// 		t.Error("TestContextEventsCacheHit: Expected compressor to run")
-// 	}
-//
-// 	// Finish request runs after write has sent. Track that it executed here.
-// 	if !finishRequest {
-// 		t.Errorf("TestContextEventsCacheHit: Expected %s to run", EventFinishRequest)
-// 	}
-// }
-
-func (c *alwaysFoundCacher) Check(ctx *Context) CacheResponse {
-	ctx.Write([]byte("cache HIT"))
-
-	return cacheResponse{
-		found:  true,
-		status: 200,
-		body:   bytes.NewBufferString("t"),
-	}
-}
-
-func (c *fakeCacher) Store(ctx *Context, ttl int) {
-	// Write to the context to test io.Writer implementation.
-	fmt.Fprint(ctx, "store")
-}
-
 // Handle ...
 func (router *dummyRouter) Handle(method string, path string, h ...HandlerFunc) {
 	if router.routes == nil {
@@ -186,27 +104,4 @@ func (router *dummyRouter) Engine() *Engine {
 
 func (router *dummyRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {}
 
-// Found returns true if the entry was found in the cache.
-func (cr cacheResponse) Found() bool {
-	return cr.found
-}
-
-// Status returns the status code for the entry.
-// If none is store in the cache, http.StatusOK is reeturned.
-func (cr cacheResponse) Status() int {
-	if cr.status == 0 {
-		return http.StatusOK
-	}
-
-	return cr.status
-}
-
-// Headers return the headers stored in cache for the response.
-func (cr cacheResponse) Headers() map[string]string {
-	return cr.headers
-}
-
-// Body returns an io.Reader of the body.
-func (cr cacheResponse) Body() io.Reader {
-	return cr.body
-}
+func (router *dummyRouter) NotFoundHandler(fn ...HandlerFunc) {}
