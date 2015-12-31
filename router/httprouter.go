@@ -26,8 +26,8 @@ func NewHTTPRouter() *HTTPRouter {
 }
 
 // Handle ...
-func (router HTTPRouter) Handle(method string, path string, h ...kumi.HandlerFunc) {
-	router.Router.Handle(method, path, func(rw http.ResponseWriter, r *http.Request, params httprouter.Params) {
+func (router HTTPRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
+	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		e := router.Engine()
 		c := e.NewContext(rw, r, h...)
 		defer e.ReturnContext(c)
@@ -69,4 +69,11 @@ func (router *HTTPRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 
 		c.Next()
 	})
+}
+
+// HasRoute returns true if the router has registered a route with that
+// method and pattern.
+func (router *HTTPRouter) HasRoute(method string, pattern string) bool {
+	h, _, _ := router.Router.Lookup(method, pattern)
+	return h != nil
 }

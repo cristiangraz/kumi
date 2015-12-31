@@ -2,6 +2,8 @@ package kumi
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -78,7 +80,7 @@ func TestRouterGroup(t *testing.T) {
 	}
 
 	for _, s := range suite {
-		router := &dummyRouter{}
+		router := &testRouter{}
 		k := New(router)
 		wh, err := wrapHandlers(s.expected...)
 		if err != nil {
@@ -118,7 +120,7 @@ func TestRouterGroup(t *testing.T) {
 			fn("/abc", s.handlers...)
 			h, ok := router.Lookup(m, fmt.Sprintf("%s%s", s.groupPrefix, "/abc"))
 			if !ok {
-				t.Errorf("TestRouterGroup: Expected registered route to be found")
+				t.Errorf("TestRouterGroup (%s): Expected registered route to be found", m)
 			}
 
 			for i, e := range expected {
@@ -131,7 +133,7 @@ func TestRouterGroup(t *testing.T) {
 }
 
 func TestRouterGroupGETCreatedHEAD(t *testing.T) {
-	router := &dummyRouter{}
+	router := &testRouter{}
 	k := New(router)
 
 	handlers := []Handler{h2}
@@ -149,7 +151,7 @@ func TestRouterGroupGETCreatedHEAD(t *testing.T) {
 }
 
 func TestRouterGroupAll(t *testing.T) {
-	router := &dummyRouter{}
+	router := &testRouter{}
 	k := New(router)
 
 	handlers := []Handler{h1}
@@ -172,9 +174,25 @@ func TestRouterGroupAll(t *testing.T) {
 	}
 }
 
+func TestGetRegistersHead(t *testing.T) {
+	k := New(&testRouter{})
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("HEAD", "/foo", nil)
+
+	k.Get("/foo", testHandler)
+	k.ServeHTTP(rec, req)
+
+	if rec.Code >= 200 && rec.Code < 300 {
+		return
+	}
+
+	t.Errorf("TestGetRegistersHead: Expected HEAD route to be found when GET route was registered. Status: %d", rec.Code)
+}
+
 func TestInvalidHandlers(t *testing.T) {
 	wrong := func() {}
-	k := New(&dummyRouter{})
+	k := New(&testRouter{})
 	suite := []struct {
 		fn func()
 	}{

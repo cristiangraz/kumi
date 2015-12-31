@@ -13,6 +13,7 @@ type (
 	HTTPTreeMux struct {
 		Router *httptreemux.TreeMux
 		engine *kumi.Engine
+		routes map[string][]string
 	}
 )
 
@@ -20,14 +21,20 @@ type (
 // If you need to set custom options, you should instantiate HTTPTreeMux
 // yourself.
 func NewHTTPTreeMux() *HTTPTreeMux {
+	r := map[string][]string{}
+	for _, m := range kumi.HTTPMethods {
+		r[m] = []string{}
+	}
+
 	return &HTTPTreeMux{
 		Router: httptreemux.New(),
+		routes: r,
 	}
 }
 
 // Handle ...
-func (router HTTPTreeMux) Handle(method string, path string, h ...kumi.HandlerFunc) {
-	router.Router.Handle(method, path, func(rw http.ResponseWriter, r *http.Request, p map[string]string) {
+func (router HTTPTreeMux) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
+	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, p map[string]string) {
 		e := router.Engine()
 		c := e.NewContext(rw, r, h...)
 		defer e.ReturnContext(c)
@@ -38,6 +45,8 @@ func (router HTTPTreeMux) Handle(method string, path string, h ...kumi.HandlerFu
 
 		c.Next()
 	})
+
+	router.routes[method] = append(router.routes[method], pattern)
 }
 
 // SetEngine sets the kumi engine on the router.
@@ -64,4 +73,15 @@ func (router *HTTPTreeMux) NotFoundHandler(h ...kumi.HandlerFunc) {
 
 		c.Next()
 	})
+}
+
+// HasRoute ...
+func (router *HTTPTreeMux) HasRoute(method string, pattern string) bool {
+	for _, p := range router.routes[method] {
+		if p == pattern {
+			return true
+		}
+	}
+
+	return false
 }

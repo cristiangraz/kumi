@@ -10,6 +10,7 @@ type (
 		SetEngine(*Engine)
 		Engine() *Engine
 		NotFoundHandler(...HandlerFunc)
+		HasRoute(method string, pattern string) bool
 	}
 
 	// RouterGroup allows for grouping routes by a base pattern (path) and shared middleware.
@@ -20,6 +21,9 @@ type (
 		engine   *Engine
 	}
 )
+
+// HTTPMethods provides an array of HTTP methods.
+var HTTPMethods = []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"}
 
 // Group creates a sub-group of the router based on a route prefix. Any middleware
 // added to the group will be appended to the parent's middleware
@@ -51,7 +55,6 @@ func (g *RouterGroup) Use(handlers ...Handler) {
 // use a bodyless response writer.
 func (g RouterGroup) Get(pattern string, handlers ...Handler) {
 	g.handle("GET", pattern, handlers...)
-	g.handle("HEAD", pattern, handlers...)
 }
 
 // Post defines an HTTP POST endpoint with one or more handlers.
@@ -70,11 +73,17 @@ func (g RouterGroup) Patch(pattern string, handlers ...Handler) {
 }
 
 // Head defines an HTTP HEAD endpoint with one or more handlers.
+// Kumi defines this automatically for all GET routes. If you want
+// to define your own Head handler, define it before defining
+// the Get handler for the same pattern.
 func (g RouterGroup) Head(pattern string, handlers ...Handler) {
 	g.handle("HEAD", pattern, handlers...)
 }
 
 // Options defines an HTTP OPTIONS endpoint with one or more handlers.
+// Kumi defines this automatically for all routes. If you want to
+// define your own Options handler, define it before defining
+// other methods against the same pattern.
 func (g RouterGroup) Options(pattern string, handlers ...Handler) {
 	g.handle("OPTIONS", pattern, handlers...)
 }
@@ -86,8 +95,9 @@ func (g RouterGroup) Delete(pattern string, handlers ...Handler) {
 
 // All is a convenience function that adds a handler to
 // GET/HEAD/POST/PUT/PATCH/DELETE methods.
+// Note HEAD/OPTIONS are set in the handle method automatically.
 func (g RouterGroup) All(pattern string, handlers ...Handler) {
-	for _, method := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"} {
+	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
 		g.handle(method, pattern, handlers...)
 	}
 }
@@ -111,7 +121,19 @@ func (g RouterGroup) handle(method, pattern string, handlers ...Handler) {
 		panic(err)
 	}
 
-	g.router.Handle(method, pattern, appendHandlers(g.Handlers, wrapped...)...)
+	h := appendHandlers(g.Handlers, wrapped...)
+
+	g.router.Handle(method, pattern, h...)
+
+	// Add OPTIONS to all routes if not defined
+	if method != "OPTIONS" && !g.router.HasRoute("OPTIONS", pattern) {
+		g.router.Handle("OPTIONS", pattern, h...)
+	}
+
+	// Add HEAD to all GET routes if no route is already set for HEAD.
+	if method == "GET" && !g.router.HasRoute("HEAD", pattern) {
+		g.router.Handle("HEAD", pattern, h...)
+	}
 }
 
 // appendHandlers extends a chain, adding the specified handlers

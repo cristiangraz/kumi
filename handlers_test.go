@@ -103,7 +103,7 @@ func TestNetHTTPCompatibility(t *testing.T) {
 			t.Fatal("TestNetHTTPCompatibility: Error in expected handlers")
 		}
 
-		e := New(&dummyRouter{})
+		e := New(&testRouter{})
 		c := e.NewContext(rec, r, wh...)
 		c.Next()
 		e.ReturnContext(c)

@@ -1,8 +1,8 @@
 package kumi
 
 import (
-	"bytes"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -10,26 +10,18 @@ import (
 )
 
 type (
-	dummyRouter struct {
-		engine *Engine
-		routes map[string]map[string][]HandlerFunc
-	}
-
-	multiResponseWriter struct {
-		http.ResponseWriter
-		b *bytes.Buffer
+	testRouter struct {
+		engine   *Engine
+		routes   map[string]map[string][]HandlerFunc
+		notFound []HandlerFunc
 	}
 )
-
-func (mrw multiResponseWriter) Write(p []byte) (int, error) {
-	return mrw.b.Write(p)
-}
 
 func TestContext(t *testing.T) {
 	rw, expected := httptest.NewRecorder(), httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "/", nil)
 
-	e := New(&dummyRouter{})
+	e := New(&testRouter{})
 	c := e.NewContext(rw, r, mw2, mw1, h2)
 
 	c.Next()
@@ -66,7 +58,7 @@ func TestContext(t *testing.T) {
 }
 
 // Handle ...
-func (router *dummyRouter) Handle(method string, path string, h ...HandlerFunc) {
+func (router *testRouter) Handle(method string, path string, h ...HandlerFunc) {
 	if router.routes == nil {
 		router.routes = make(map[string]map[string][]HandlerFunc, 1)
 	}
@@ -78,7 +70,7 @@ func (router *dummyRouter) Handle(method string, path string, h ...HandlerFunc) 
 	router.routes[method][path] = h
 }
 
-func (router *dummyRouter) Lookup(method string, path string) ([]HandlerFunc, bool) {
+func (router *testRouter) Lookup(method string, path string) ([]HandlerFunc, bool) {
 	if router.routes == nil {
 		return nil, false
 	}
@@ -94,14 +86,46 @@ func (router *dummyRouter) Lookup(method string, path string) ([]HandlerFunc, bo
 	return nil, false
 }
 
-func (router *dummyRouter) SetEngine(e *Engine) {
+func (router *testRouter) SetEngine(e *Engine) {
 	router.engine = e
 }
 
-func (router *dummyRouter) Engine() *Engine {
+func (router *testRouter) Engine() *Engine {
 	return router.engine
 }
 
-func (router *dummyRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {}
+func (router *testRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h, found := router.Lookup(r.Method, r.URL.Path)
+	if !found {
+		if len(router.notFound) == 0 {
+			log.Println("Route not found")
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			e := router.Engine()
+			c := e.NewContext(w, r, router.notFound...)
+			defer e.ReturnContext(c)
 
-func (router *dummyRouter) NotFoundHandler(fn ...HandlerFunc) {}
+			c.Next()
+		}
+		return
+	}
+
+	e := router.Engine()
+	c := e.NewContext(w, r, h...)
+	defer e.ReturnContext(c)
+
+	c.Next()
+}
+
+func (router *testRouter) NotFoundHandler(fn ...HandlerFunc) {
+	router.notFound = fn
+}
+
+// HasRoute ...
+func (router *testRouter) HasRoute(method string, pattern string) bool {
+	if _, found := router.Lookup(method, pattern); found {
+		return true
+	}
+
+	return false
+}

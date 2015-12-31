@@ -13,6 +13,7 @@ type (
 	GorillaMuxRouter struct {
 		Router *mux.Router
 		engine *kumi.Engine
+		routes map[string][]string
 	}
 )
 
@@ -20,14 +21,20 @@ type (
 // If you need to set custom options, you should instantiate GorillaMuxRouter
 // yourself.
 func NewGorillaMuxRouter() *GorillaMuxRouter {
+	r := map[string][]string{}
+	for _, m := range kumi.HTTPMethods {
+		r[m] = []string{}
+	}
+
 	return &GorillaMuxRouter{
 		Router: mux.NewRouter(),
+		routes: r,
 	}
 }
 
 // Handle ...
-func (router GorillaMuxRouter) Handle(method string, path string, h ...kumi.HandlerFunc) {
-	router.Router.HandleFunc(path, func(rw http.ResponseWriter, r *http.Request) {
+func (router GorillaMuxRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
+	router.Router.HandleFunc(pattern, func(rw http.ResponseWriter, r *http.Request) {
 		e := router.Engine()
 		c := e.NewContext(rw, r, h...)
 		defer e.ReturnContext(c)
@@ -38,6 +45,8 @@ func (router GorillaMuxRouter) Handle(method string, path string, h ...kumi.Hand
 
 		c.Next()
 	}).Methods(method)
+
+	router.routes[method] = append(router.routes[method], pattern)
 }
 
 // SetEngine sets the kumi engine on the router.
@@ -64,4 +73,16 @@ func (router GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 
 		c.Next()
 	})
+}
+
+// HasRoute returns true if the router has registered a route with that
+// method and pattern.
+func (router *GorillaMuxRouter) HasRoute(method string, pattern string) bool {
+	for _, p := range router.routes[method] {
+		if p == pattern {
+			return true
+		}
+	}
+
+	return false
 }

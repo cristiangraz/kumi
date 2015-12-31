@@ -9,7 +9,7 @@ import (
 )
 
 func TestKumi(t *testing.T) {
-	k := New(&dummyRouter{})
+	k := New(&testRouter{})
 
 	srv := &http.Server{
 		Addr: ":8080",

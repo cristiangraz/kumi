@@ -222,7 +222,7 @@ func TestCors(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		k := New(&dummyRouter{})
+		k := New(&testRouter{})
 		k.SetGlobalCors(tt.options)
 
 		rec := httptest.NewRecorder()
@@ -240,6 +240,42 @@ func TestCors(t *testing.T) {
 			if actual := strings.Join(resHeaders[name], ", "); actual != value {
 				t.Errorf("TestCors (%d): Invalid header %q, wanted %q, got %q", i, name, value, actual)
 			}
+		}
+	}
+}
+
+func TestCorsPreflight(t *testing.T) {
+	k := New(&testRouter{})
+	k.SetGlobalCors(&CorsOptions{
+		AllowOrigin: []string{"*"},
+	})
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("OPTIONS", "/foo", nil)
+	req.Header.Set("Origin", "http://kumi.io")
+
+	k.Get("/foo", k.Cors("GET"), testHandler)
+	k.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("TestCorsPreflight: Expected OPTIONS Preflight request to return cors. %d given", rec.Code)
+	}
+
+	expected := map[string]string{
+		"Allow": "GET, HEAD, OPTIONS",
+		"Vary":  "",
+		"Access-Control-Allow-Origin":      "*",
+		"Access-Control-Allow-Methods":     "GET, HEAD, OPTIONS",
+		"Access-Control-Allow-Headers":     "",
+		"Access-Control-Allow-Credentials": "",
+		"Access-Control-Max-Age":           "",
+		"Access-Control-Expose-Headers":    "",
+	}
+
+	resHeaders := rec.Header()
+	for name, value := range expected {
+		if actual := strings.Join(resHeaders[name], ", "); actual != value {
+			t.Errorf("TestCorsPreflight: Invalid header %q, wanted %q, got %q", name, value, actual)
 		}
 	}
 }
