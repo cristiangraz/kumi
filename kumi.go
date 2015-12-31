@@ -14,8 +14,14 @@ type (
 	// Engine is the glue that holds everything together.
 	Engine struct {
 		RouterGroup
-		Address string
-		pool    sync.Pool
+		pool sync.Pool
+
+		// Global CORS settings. This is used only if you attach the
+		// Engine.CorsOptions handler to your handler chain of
+		// each route or route group.
+		// Additionally you can provide route-specific overrides
+		// for any of the settings in CorsOptions.
+		cors *CorsOptions
 	}
 
 	// BodylessResponseWriter wraps http.ResponseWriter, discarding
@@ -78,15 +84,11 @@ func (e *Engine) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 // Run starts kumi.
 func (e *Engine) Run(addr string) error {
-	e.Address = addr
-
 	return e.Serve(&http.Server{Addr: addr})
 }
 
 // RunTLS starts kumi with a given TLS config.
 func (e *Engine) RunTLS(addr string, config *tls.Config) error {
-	e.Address = addr
-
 	return e.Serve(&http.Server{
 		Addr:      addr,
 		TLSConfig: config,
