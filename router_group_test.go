@@ -231,6 +231,62 @@ func TestInvalidHandlers(t *testing.T) {
 	}
 }
 
+func TestNotFoundHandler(t *testing.T) {
+	for _, inheritMiddleware := range []bool{true, false} {
+		r := &testRouter{}
+		k := New(r)
+
+		nfh := func(c *Context) {
+			c.Header().Set("X-Not-Found-Handler", "True")
+			c.WriteHeader(http.StatusNotFound)
+		}
+
+		mw := func(c *Context) {
+			c.Header().Set("X-Middleware-Ran", "True")
+			c.Next()
+		}
+
+		// Set Global middleware to run
+		k.Use(mw)
+
+		// Set NotFoundHandler
+		k.NotFoundHandler(inheritMiddleware, nfh)
+
+		// NotFoundHandler should include global middleware
+		expectedLength := 1
+		if inheritMiddleware {
+			expectedLength = 2
+		}
+		if len(r.notFound) != expectedLength {
+			t.Error("TestNotFoundHandler: Expected not found handler to have two routes")
+		}
+
+		rec := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/not-found-path", nil)
+
+		c := k.NewContext(rec, req)
+		k.ServeHTTP(c, c.Request)
+		k.ReturnContext(c)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("Expected not found handler to return 404, given %d", rec.Code)
+		}
+
+		if rec.Header().Get("X-Not-Found-Handler") != "True" {
+			t.Error("TestNotFoundHandler: Expected X-Not-Found-Handler header")
+		}
+
+		// Ensure global middleware ran on NFH when inheritMiddleware = true
+		expectedMw := ""
+		if inheritMiddleware {
+			expectedMw = "True"
+		}
+		if rec.Header().Get("X-Middleware-Ran") != expectedMw {
+			t.Error("TestNotFoundHandler: Expected X-Middleware-Ran header")
+		}
+	}
+}
+
 func funcEqual(a, b Handler) bool {
 	av := reflect.ValueOf(&a).Elem()
 	bv := reflect.ValueOf(&b).Elem()

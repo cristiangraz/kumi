@@ -150,3 +150,70 @@ func TestRouters(t *testing.T) {
 		}
 	}
 }
+
+func TestNotFoundHandlers(t *testing.T) {
+	routers := []struct {
+		name   string
+		router kumi.Router
+	}{
+		{
+			name:   "httprouter",
+			router: NewHTTPRouter(),
+		},
+		{
+			name:   "httptreemux",
+			router: NewHTTPTreeMux(),
+		},
+		{
+			name:   "gorilla",
+			router: NewGorillaMuxRouter(),
+		},
+	}
+
+	nfh := func(c *kumi.Context) {
+		c.Header().Set("X-Not-Found-Handler", "True")
+		c.WriteHeader(http.StatusNotFound)
+	}
+
+	mw := func(c *kumi.Context) {
+		c.Header().Set("X-Middleware-Ran", "True")
+		c.Next()
+	}
+
+	for _, inheritMiddleware := range []bool{true, false} {
+		for _, r := range routers {
+			k := kumi.New(r.router)
+
+			// Set Global middleware to run
+			k.Use(mw)
+
+			// Set NotFoundHandler
+			k.NotFoundHandler(inheritMiddleware, nfh)
+
+			rec := httptest.NewRecorder()
+			req, _ := http.NewRequest("GET", "/not-found-path", nil)
+
+			c := k.NewContext(rec, req)
+			k.ServeHTTP(c, c.Request)
+			k.ReturnContext(c)
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("TestNotFoundHandlers (%s): Expected not found handler to return 404, given %d", r.name, rec.Code)
+			}
+
+			// Ensure NFH ran
+			if rec.Header().Get("X-Not-Found-Handler") != "True" {
+				t.Errorf("TestNotFoundHandler (%s): Expected X-Not-Found-Handler header", r.name)
+			}
+
+			// Ensure global middleware ran on NFH when inheritMiddleware = true
+			expectedMw := ""
+			if inheritMiddleware {
+				expectedMw = "True"
+			}
+			if rec.Header().Get("X-Middleware-Ran") != expectedMw {
+				t.Errorf("TestNotFoundHandler (%s): Expected X-Middleware-Ran header", r.name)
+			}
+		}
+	}
+}

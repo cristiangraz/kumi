@@ -23,6 +23,7 @@ func TestCors(t *testing.T) {
 		reqHeaders   map[string]string
 		method       string
 		headers      map[string]string
+		statusCode   int
 	}{
 		{
 			// No Cors Response when no config
@@ -240,6 +241,48 @@ func TestCors(t *testing.T) {
 				"Access-Control-Expose-Headers":    "",
 			},
 		},
+		{
+			// Test HEAD and OPTIONS in allow methods doesn't lead to duplicates
+			options: &CorsOptions{
+				AllowOrigin:  []string{"*"},
+				AllowMethods: []string{"GET", "HEAD", "OPTIONS"},
+			},
+			reqHeaders: map[string]string{
+				"Origin":                        "http://kumi.io",
+				"Access-Control-Request-Method": "GET",
+			},
+			method: "OPTIONS",
+			headers: map[string]string{
+				"Allow": "GET, HEAD, OPTIONS",
+				"Vary":  "",
+				"Access-Control-Allow-Origin":      "*",
+				"Access-Control-Allow-Methods":     "GET, HEAD, OPTIONS",
+				"Access-Control-Allow-Headers":     "",
+				"Access-Control-Allow-Credentials": "",
+				"Access-Control-Max-Age":           "",
+				"Access-Control-Expose-Headers":    "",
+			},
+		},
+		{
+			// Test OPTIONS request with no Origin
+			options: &CorsOptions{
+				AllowOrigin:  []string{"*"},
+				AllowMethods: []string{"GET"},
+			},
+			reqHeaders: map[string]string{},
+			method:     "OPTIONS",
+			headers: map[string]string{
+				"Allow": "GET, HEAD, OPTIONS",
+				"Vary":  "",
+				"Access-Control-Allow-Origin":      "",
+				"Access-Control-Allow-Methods":     "",
+				"Access-Control-Allow-Headers":     "",
+				"Access-Control-Allow-Credentials": "",
+				"Access-Control-Max-Age":           "",
+				"Access-Control-Expose-Headers":    "",
+			},
+			statusCode: http.StatusNoContent,
+		},
 	}
 
 	for i, tt := range tests {
@@ -261,6 +304,10 @@ func TestCors(t *testing.T) {
 			if actual := strings.Join(resHeaders[name], ", "); actual != value {
 				t.Errorf("TestCors (%d): Invalid header %q, wanted %q, got %q", i, name, value, actual)
 			}
+		}
+
+		if tt.statusCode > 0 && rec.Code != tt.statusCode {
+			t.Errorf("TestCors (%d): Invalid status code, wanted %d, got %d", i, tt.statusCode, rec.Code)
 		}
 	}
 }

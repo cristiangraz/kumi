@@ -102,14 +102,21 @@ func (g RouterGroup) All(pattern string, handlers ...Handler) {
 	}
 }
 
-// NotFoundHandler ...
-func (g RouterGroup) NotFoundHandler(handlers ...Handler) {
+// NotFoundHandler runs when no route is found.
+// inhermitMiddleware determines if the global and group middleware chain
+// should run on a not found request. You can optionally set to false and
+// include a custom middleware chain in the handlers parameters.
+func (g RouterGroup) NotFoundHandler(inheritMiddleware bool, handlers ...Handler) {
 	wrapped, err := wrapHandlers(handlers...)
 	if err != nil {
 		panic(err)
 	}
 
-	g.router.NotFoundHandler(appendHandlers(g.Handlers, wrapped...)...)
+	if inheritMiddleware {
+		g.router.NotFoundHandler(appendHandlers(g.Handlers, wrapped...)...)
+	} else {
+		g.router.NotFoundHandler(wrapped...)
+	}
 }
 
 // handle consolidates all of the middleware into a route that satisfies the

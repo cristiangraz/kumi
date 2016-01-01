@@ -74,19 +74,13 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 
 	var hasGet, hasHead, hasOptions bool
 	for _, m := range ac.AllowMethods {
-		if m == "GET" {
+		switch m {
+		case "GET":
 			hasGet = true
-			continue
-		}
-
-		if m == "HEAD" {
+		case "HEAD":
 			hasHead = true
-			continue
-		}
-
-		if m == "OPTIONS" {
+		case "OPTIONS":
 			hasOptions = true
-			continue
 		}
 	}
 

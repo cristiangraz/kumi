@@ -29,20 +29,49 @@ func TestKumi(t *testing.T) {
 	}
 }
 
-func TestBodylessResponseWriter(t *testing.T) {
-	w := httptest.NewRecorder()
-	writer := BodylessResponseWriter{w}
+func TestNewContextHTTP(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/not-found-path", nil)
+	req.Host = "exAmPlE.com"
 
-	written, err := writer.Write([]byte("hello"))
-	if err != nil {
-		t.Errorf("TestBodylessResponseWriter: Didn't expect an error. Error: %s", err)
+	k := New(&testRouter{})
+	c := k.NewContext(rec, req)
+
+	if c.Request.Host != "example.com" {
+		t.Errorf("TestNewContextHTTP: Expected Host to be lowercased. Given: %s", c.Request.Host)
 	}
 
-	if written != 5 {
-		t.Errorf("TestBodylessResponseWriter: Expected 5 bytes to be recorded. Written: %d", written)
+	if c.Request.URL.Host != "example.com" {
+		t.Errorf("TestNewContextHTTP: Expected Host to be lowercased. Given: %s", c.Request.Host)
 	}
 
-	if len(w.Body.Bytes()) > 0 {
-		t.Error("TestBodylessResponseWriter: Didn't expect any bytes to be written")
+	if c.Request.URL.Scheme != "http" {
+		t.Errorf("TestNewContextHTTP: Expected scheme to be http. Given %s", c.Request.URL.Scheme)
 	}
+
+	k.ReturnContext(c)
+}
+
+func TestNewContextHTTPS(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/not-found-path", nil)
+	req.Host = "Example.com"
+	req.TLS = &tls.ConnectionState{}
+
+	k := New(&testRouter{})
+	c := k.NewContext(rec, req)
+
+	if c.Request.Host != "example.com" {
+		t.Errorf("TestNewContextHTTP: Expected Host to be lowercased. Given: %s", c.Request.Host)
+	}
+
+	if c.Request.URL.Host != "example.com" {
+		t.Errorf("TestNewContextHTTP: Expected Host to be lowercased. Given: %s", c.Request.Host)
+	}
+
+	if c.Request.URL.Scheme != "https" {
+		t.Errorf("TestNewContextHTTP: Expected scheme to be http. Given %s", c.Request.URL.Scheme)
+	}
+
+	k.ReturnContext(c)
 }
