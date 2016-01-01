@@ -2,7 +2,6 @@ package kumi
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -23,6 +22,10 @@ func TestContext(t *testing.T) {
 
 	e := New(&testRouter{})
 	c := e.NewContext(rw, r, mw2, mw1, h2)
+
+	if c.Status() != http.StatusOK {
+		t.Errorf("TestContext: Expected zero-value status to return %d, given %d", http.StatusOK, c.Status())
+	}
 
 	c.Next()
 	e.ReturnContext(c)
@@ -54,6 +57,27 @@ func TestContext(t *testing.T) {
 
 	if !reflect.DeepEqual(err, Exception(c)) {
 		t.Error("TestContext: Expected exceptions to be equal")
+	}
+}
+
+func TestHeadRequestsDontReturnBody(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	k := New(&testRouter{})
+	r, _ := http.NewRequest("HEAD", "/", nil)
+	c := k.NewContext(rec, r, func(c *Context) {
+		c.Write([]byte("hello"))
+	})
+	c.Next()
+
+	if _, ok := c.ResponseWriter.(BodylessResponseWriter); !ok {
+		t.Error("TestHeadRequestsDontReturnBody: Expected HEAD request to use BodylessResponseWriter")
+	}
+
+	k.ReturnContext(c)
+
+	if len(rec.Body.Bytes()) > 0 {
+		t.Error("TestHeadRequestsDontReturnBody: Didn't expect any bytes to be written")
 	}
 }
 
@@ -98,7 +122,6 @@ func (router *testRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h, found := router.Lookup(r.Method, r.URL.Path)
 	if !found {
 		if len(router.notFound) == 0 {
-			log.Println("Route not found")
 			w.WriteHeader(http.StatusNotFound)
 		} else {
 			e := router.Engine()

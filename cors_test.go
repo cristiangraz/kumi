@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 var testHandler HandlerFunc
@@ -167,6 +168,26 @@ func TestCors(t *testing.T) {
 				"Access-Control-Allow-Credentials": "",
 				"Access-Control-Max-Age":           "",
 				"Access-Control-Expose-Headers":    "X-Header-1, X-Header-2",
+			},
+		},
+		{
+			// Test max age
+			options: &CorsOptions{
+				AllowOrigin: []string{"http://kumi.io"},
+				MaxAge:      time.Duration(24) * time.Hour,
+			},
+			reqHeaders: map[string]string{
+				"Origin": "http://kumi.io",
+			},
+			method: "GET",
+			headers: map[string]string{
+				"Vary": "Origin",
+				"Access-Control-Allow-Origin":      "http://kumi.io",
+				"Access-Control-Allow-Methods":     "",
+				"Access-Control-Allow-Headers":     "",
+				"Access-Control-Allow-Credentials": "",
+				"Access-Control-Max-Age":           "86400",
+				"Access-Control-Expose-Headers":    "",
 			},
 		},
 		{

@@ -1,6 +1,7 @@
 package kumi
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -154,7 +155,7 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 		}
 
 		if ac.MaxAge.Seconds() > 0 {
-			c.Header().Set(corsMaxAge, ac.MaxAge.String())
+			c.Header().Set(corsMaxAge, fmt.Sprintf("%.0f", ac.MaxAge.Seconds()))
 		}
 
 		// For OPTIONS requests, don't continue to next middleware
