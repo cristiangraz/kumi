@@ -4,16 +4,10 @@ middleware, and routing. Rather than requiring a specific router, Kumi uses a
 router interface so you can choose the router that best suits your project.
 Kumi includes three routers by default: httprouter, httptreemux, and gorilla mux.
 
-Because our use case involved various implementations (including a reverse proxy),
-Kumi also includes a few event hooks you can tie into. In order to have very tight integrations,
-we've created interfaces for Caching, Logging, and Compression. While you
-are free to use existing Go middleware to accomplish those three things, the interfaces
-give you extra flexibility and integration points of those important elements in the framework
-itself.
-
 While Kumi core is light, it does ship with some middleware and functionality
-to make developing API clients painless. None of these are built into the core,
-so you are still free to take a different approach if it makes more sense for your project.
+to make developing API endpoints simpler. The API response format is
+a subpackage, so you are still free to take a different approach if it makes
+more sense for your project.
 
 ## Features
  * Fast routing with the flexibility to bring your own router
@@ -25,10 +19,13 @@ so you are still free to take a different approach if it makes more sense for yo
  stop execution of the next handler.
  * Use of ```x/net/context```. Easy integration with App Engine and default
  context to make unit testing / mocking and environment testing easy.
- * Wrap multiple writers -- including conditional writers based on response headers
+ * Wrap multiple writers -- including conditional writers based on response headers --
+  to avoid buffering. This is how the compression and minification middleware work.
  * Common middleware included. Easily use other Go middleware (including anything
      compatible with ```net/http```).
  * API components (as optional sub-packages) for painless REST API development
+ * Built-in CORS handling
+ * NotFound and MethodNotAllowed handlers
  * Automatic support for proper HTTP cache headers and included cache sub-package
  for easy reverse proxy/CDN integration.
  * Graceful restarts
@@ -47,6 +44,11 @@ func main() {
 	k.Use(middleware.Logger)
 	k.Use(middleware.Compressor)
 	k.Use(middleware.Minify)
+
+    k.SetGlobalCors(*kumi.CorsOptions{
+        AllowOrigin: []string{"https://dashboard.example.com"},
+        MaxAge: time.Duration(24) * time.Hour,
+    })
 
     // Create starting context for all requests
     ctx := context.Background()
@@ -91,9 +93,9 @@ func main() {
     // User area requires auth middleware
     user := k.Group("/user", auth)
     {
-        user.Get("/:id", GetUser)
-        user.Get("/:id/email", GetUserEmail)
-        user.Put("/:id", UpdateUser)
+        user.Get("/:id", k.Cors("GET", "PUT"), GetUser)
+        user.Get("/:id/email", k.Gors("GET"), GetUserEmail)
+        user.Put("/:id", k.Cors("GET", "PUT"), UpdateUser)
     }
 }
 ```
@@ -130,10 +132,6 @@ you should go with gorilla.
  * Security: Create assertion middleware functions to grant or forbid access.
  * Compressor: gzip compression
 
-## Notable Third Party Contributions
- * Garnish: LRU caching to redis inspired by Varnish
- * Minify: Minification for CSS, JS, and HTML.
-
 ## Dependencies
  Kumi core has the following dependencies outside of the standard library:
 
@@ -165,4 +163,3 @@ a list of great projects you should check out if you like the concepts in Kumi:
  * [volatile](https://github.com/volatile/core): Very nice framework. Beautiful
  log format and color-coding that was used in the Logger middleware.
  * [alice](https://github.com/justinas/alice): Painless middleware chaining.
- * [symfony](https://symfony.com/): PHP framework, but inspired event hooks.

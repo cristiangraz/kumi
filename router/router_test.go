@@ -248,7 +248,7 @@ func TestMethodNotAllowedHandlers(t *testing.T) {
 		c.Next()
 	}
 
-	expected := []string{"PATCH", "OPTIONS"}
+	expected := []string{"PATCH", "DELETE"}
 	for _, r := range routers {
 		k := kumi.New(r.router)
 
@@ -258,6 +258,7 @@ func TestMethodNotAllowedHandlers(t *testing.T) {
 		k.Get("/")
 		k.Post("/bla/bla")
 		k.Patch("/path")
+		k.Delete("/path")
 
 		for _, inheritMiddleware := range []bool{true, false} {
 			// Set MethodNotAllowedHandler
@@ -288,7 +289,7 @@ func TestMethodNotAllowedHandlers(t *testing.T) {
 				t.Errorf("TestmMethodNotAllowedHandlers (%s): Expected allow header with 2 methods. %d given", r.name, len(given))
 			}
 
-			if !((given[0] == "PATCH" && given[1] == "OPTIONS") || (given[0] == "OPTIONS" && given[1] == "PATCH")) {
+			if !((given[0] == "PATCH" && given[1] == "DELETE") || (given[0] == "DELETE" && given[1] == "PATCH")) {
 				t.Errorf("TestMethodNotAllowedHandlers (%s): Expected allow header to contain %q, given %q", r.name, expected, given)
 			}
 
