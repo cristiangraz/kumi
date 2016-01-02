@@ -5,7 +5,7 @@ import (
 )
 
 type (
-	// Rules defines the mapping to convert error types to APIError structs.
+	// Rules defines the mapping to convert error types to Error structs.
 	// The string is the name of the field.
 	Rules map[string][]Mapping
 
@@ -17,7 +17,8 @@ type (
 	}
 )
 
-// Validate takes schema errors and mapping rules and returns an array of APIError structs
+// Validate takes schema errors and mapping rules and returns
+// an array of Error structs
 func Validate(errors []gojsonschema.ResultError, rules Rules) []Error {
 	var e []Error
 	for _, err := range errors {

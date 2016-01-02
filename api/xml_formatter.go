@@ -11,7 +11,7 @@ func XMLFormatter(r Response, w http.ResponseWriter) error {
 	w.WriteHeader(r.Status)
 
 	// hide status code for successful responses
-	if r.Success == true {
+	if r.Success {
 		r.Status = 0
 	}
 
