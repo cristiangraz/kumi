@@ -35,7 +35,7 @@ func NewGorillaMuxRouter() *GorillaMuxRouter {
 }
 
 // Handle ...
-func (router GorillaMuxRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
+func (router *GorillaMuxRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
 	router.Router.HandleFunc(pattern, func(rw http.ResponseWriter, r *http.Request) {
 		e := router.Engine()
 		c := e.NewContext(rw, r, h...)
@@ -57,12 +57,12 @@ func (router *GorillaMuxRouter) SetEngine(e *kumi.Engine) {
 }
 
 // Engine retrieves the kumi engine.
-func (router GorillaMuxRouter) Engine() *kumi.Engine {
+func (router *GorillaMuxRouter) Engine() *kumi.Engine {
 	return router.engine
 }
 
 // ServeHTTP ...
-func (router GorillaMuxRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+func (router *GorillaMuxRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	router.Router.ServeHTTP(rw, r)
 }
 

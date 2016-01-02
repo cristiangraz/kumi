@@ -32,7 +32,7 @@ var HTTPMethods = []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DE
 
 // Group creates a sub-group of the router based on a route prefix. Any middleware
 // added to the group will be appended to the parent's middleware
-func (g RouterGroup) Group(pattern string, handlers ...Handler) RouterGroup {
+func (g *RouterGroup) Group(pattern string, handlers ...Handler) RouterGroup {
 	wrapped, err := wrapHandlers(handlers...)
 	if err != nil {
 		panic(err)
@@ -58,22 +58,22 @@ func (g *RouterGroup) Use(handlers ...Handler) {
 // Get defines an HTTP GET endpoint with one or more handlers.
 // It will also register a HEAD endpoint. Kumi will automatically
 // use a bodyless response writer.
-func (g RouterGroup) Get(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Get(pattern string, handlers ...Handler) {
 	g.handle("GET", pattern, handlers...)
 }
 
 // Post defines an HTTP POST endpoint with one or more handlers.
-func (g RouterGroup) Post(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Post(pattern string, handlers ...Handler) {
 	g.handle("POST", pattern, handlers...)
 }
 
 // Put defines an HTTP PUT endpoint with one or more handlers.
-func (g RouterGroup) Put(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Put(pattern string, handlers ...Handler) {
 	g.handle("PUT", pattern, handlers...)
 }
 
 // Patch defines an HTTP PATCH endpoint with one or more handlers.
-func (g RouterGroup) Patch(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Patch(pattern string, handlers ...Handler) {
 	g.handle("PATCH", pattern, handlers...)
 }
 
@@ -81,7 +81,7 @@ func (g RouterGroup) Patch(pattern string, handlers ...Handler) {
 // Kumi defines this automatically for all GET routes. If you want
 // to define your own Head handler, define it before defining
 // the Get handler for the same pattern.
-func (g RouterGroup) Head(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Head(pattern string, handlers ...Handler) {
 	g.handle("HEAD", pattern, handlers...)
 }
 
@@ -89,19 +89,19 @@ func (g RouterGroup) Head(pattern string, handlers ...Handler) {
 // Kumi defines this automatically for all routes. If you want to
 // define your own Options handler, define it before defining
 // other methods against the same pattern.
-func (g RouterGroup) Options(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Options(pattern string, handlers ...Handler) {
 	g.handle("OPTIONS", pattern, handlers...)
 }
 
 // Delete defines an HTTP DELETE endpoint with one or more handlers.
-func (g RouterGroup) Delete(pattern string, handlers ...Handler) {
+func (g *RouterGroup) Delete(pattern string, handlers ...Handler) {
 	g.handle("DELETE", pattern, handlers...)
 }
 
 // All is a convenience function that adds a handler to
 // GET/HEAD/POST/PUT/PATCH/DELETE methods.
 // Note HEAD/OPTIONS are set in the handle method automatically.
-func (g RouterGroup) All(pattern string, handlers ...Handler) {
+func (g *RouterGroup) All(pattern string, handlers ...Handler) {
 	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
 		g.handle(method, pattern, handlers...)
 	}
@@ -111,7 +111,7 @@ func (g RouterGroup) All(pattern string, handlers ...Handler) {
 // inhermitMiddleware determines if the global and group middleware chain
 // should run on a not found request. You can optionally set to false and
 // include a custom middleware chain in the handlers parameters.
-func (g RouterGroup) NotFoundHandler(inheritMiddleware bool, handlers ...Handler) {
+func (g *RouterGroup) NotFoundHandler(inheritMiddleware bool, handlers ...Handler) {
 	wrapped, err := wrapHandlers(handlers...)
 	if err != nil {
 		panic(err)
@@ -144,7 +144,7 @@ func (g *RouterGroup) MethodNotAllowedHandler(inheritMiddleware bool, handlers .
 
 // handle consolidates all of the middleware into a route that satisfies the
 // router.Handle interface
-func (g RouterGroup) handle(method, pattern string, handlers ...Handler) {
+func (g *RouterGroup) handle(method, pattern string, handlers ...Handler) {
 	pattern = g.pattern + pattern
 	wrapped, err := wrapHandlers(handlers...)
 	if err != nil {

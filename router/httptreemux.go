@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/cristiangraz/kumi"
 	"github.com/dimfeld/httptreemux"
@@ -33,7 +34,7 @@ func NewHTTPTreeMux() *HTTPTreeMux {
 }
 
 // Handle ...
-func (router HTTPTreeMux) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
+func (router *HTTPTreeMux) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
 	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, p map[string]string) {
 		e := router.Engine()
 		c := e.NewContext(rw, r, h...)
@@ -55,12 +56,12 @@ func (router *HTTPTreeMux) SetEngine(e *kumi.Engine) {
 }
 
 // Engine retrieves the kumi engine.
-func (router HTTPTreeMux) Engine() *kumi.Engine {
+func (router *HTTPTreeMux) Engine() *kumi.Engine {
 	return router.engine
 }
 
 // ServeHTTP ...
-func (router HTTPTreeMux) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+func (router *HTTPTreeMux) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	router.Router.ServeHTTP(rw, r)
 }
 
@@ -73,6 +74,24 @@ func (router *HTTPTreeMux) NotFoundHandler(h ...kumi.HandlerFunc) {
 
 		c.Next()
 	})
+}
+
+// MethodNotAllowedHandler ...
+func (router *HTTPTreeMux) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
+	router.Router.MethodNotAllowedHandler = func(rw http.ResponseWriter, r *http.Request, methods map[string]httptreemux.HandlerFunc) {
+		e := router.Engine()
+		c := e.NewContext(rw, r, h...)
+		defer e.ReturnContext(c)
+
+		var allow []string
+		for m := range methods {
+			allow = append(allow, m)
+		}
+
+		c.Header().Set("Allow", strings.Join(allow, ", "))
+
+		c.Next()
+	}
 }
 
 // HasRoute ...
