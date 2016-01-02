@@ -10,6 +10,11 @@ type (
 		SetEngine(*Engine)
 		Engine() *Engine
 		NotFoundHandler(...HandlerFunc)
+
+		// MethodNotAllowedHandler registers handlers for MethodNotAllowed
+		// responses. The router is responsible for setting the Allow response
+		// header here.
+		MethodNotAllowedHandler(...HandlerFunc)
 		HasRoute(method string, pattern string) bool
 	}
 
@@ -116,6 +121,24 @@ func (g RouterGroup) NotFoundHandler(inheritMiddleware bool, handlers ...Handler
 		g.router.NotFoundHandler(appendHandlers(g.Handlers, wrapped...)...)
 	} else {
 		g.router.NotFoundHandler(wrapped...)
+	}
+}
+
+// MethodNotAllowedHandler runs when a route exists at the current
+// path -- but not for the request method used.
+// inhermitMiddleware determines if the global and group middleware chain
+// should run on a method not allowed request. You can optionally set to
+// false and include a custom middleware chain in the handlers parameters.
+func (g *RouterGroup) MethodNotAllowedHandler(inheritMiddleware bool, handlers ...Handler) {
+	wrapped, err := wrapHandlers(handlers...)
+	if err != nil {
+		panic(err)
+	}
+
+	if inheritMiddleware {
+		g.router.MethodNotAllowedHandler(appendHandlers(g.Handlers, wrapped...)...)
+	} else {
+		g.router.MethodNotAllowedHandler(wrapped...)
 	}
 }
 

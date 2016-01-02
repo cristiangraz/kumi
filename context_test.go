@@ -5,14 +5,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 type (
 	testRouter struct {
-		engine   *Engine
-		routes   map[string]map[string][]HandlerFunc
-		notFound []HandlerFunc
+		engine           *Engine
+		routes           map[string]map[string][]HandlerFunc
+		notFound         []HandlerFunc
+		methodNotAllowed []HandlerFunc
 	}
 )
 
@@ -121,6 +123,26 @@ func (router *testRouter) Engine() *Engine {
 func (router *testRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h, found := router.Lookup(r.Method, r.URL.Path)
 	if !found {
+		methods := router.getMethods(r)
+		if len(methods) > 0 {
+			// 405 Not Allowed
+			if len(router.methodNotAllowed) == 0 {
+				w.Header().Set("Allow", strings.Join(methods, ", "))
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			} else {
+				e := router.Engine()
+				c := e.NewContext(w, r, router.methodNotAllowed...)
+				defer e.ReturnContext(c)
+
+				c.Header().Set("Allow", strings.Join(methods, ", "))
+
+				c.Next()
+			}
+
+			return
+		}
+
+		// 404
 		if len(router.notFound) == 0 {
 			w.WriteHeader(http.StatusNotFound)
 		} else {
@@ -130,7 +152,6 @@ func (router *testRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			c.Next()
 		}
-		return
 	}
 
 	e := router.Engine()
@@ -144,6 +165,10 @@ func (router *testRouter) NotFoundHandler(fn ...HandlerFunc) {
 	router.notFound = fn
 }
 
+func (router *testRouter) MethodNotAllowedHandler(fn ...HandlerFunc) {
+	router.methodNotAllowed = fn
+}
+
 // HasRoute ...
 func (router *testRouter) HasRoute(method string, pattern string) bool {
 	if _, found := router.Lookup(method, pattern); found {
@@ -151,4 +176,15 @@ func (router *testRouter) HasRoute(method string, pattern string) bool {
 	}
 
 	return false
+}
+
+// getMethods ...
+func (router *testRouter) getMethods(r *http.Request) (methods []string) {
+	for _, m := range HTTPMethods {
+		if _, found := router.Lookup(m, r.URL.Path); found {
+			methods = append(methods, m)
+		}
+	}
+
+	return methods
 }

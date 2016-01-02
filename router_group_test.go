@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -283,6 +284,70 @@ func TestNotFoundHandler(t *testing.T) {
 		}
 		if rec.Header().Get("X-Middleware-Ran") != expectedMw {
 			t.Error("TestNotFoundHandler: Expected X-Middleware-Ran header")
+		}
+	}
+}
+
+func TestMethodNotAllowedHandlers(t *testing.T) {
+	mnah := func(c *Context) {
+		c.Header().Set("X-Method-Not-Allowed-Handler", "True")
+		c.WriteHeader(http.StatusMethodNotAllowed)
+	}
+
+	mw := func(c *Context) {
+		c.Header().Set("X-Middleware-Ran", "True")
+		c.Next()
+	}
+
+	r := &testRouter{}
+	k := New(r)
+
+	// Global Middleware
+	k.Use(mw)
+
+	k.Patch("/path")
+
+	expected := []string{"PATCH", "OPTIONS"}
+	for _, inheritMiddleware := range []bool{true, false} {
+		// Set MethodNotAllowedHandler
+		k.MethodNotAllowedHandler(inheritMiddleware, mnah)
+
+		rec := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/path", nil)
+
+		c := k.NewContext(rec, req)
+		k.ServeHTTP(c, c.Request)
+		k.ReturnContext(c)
+
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("TestMethodNotAllowedHandlers: Expected method not allowed handler to return 405, given %d", rec.Code)
+		}
+
+		// Ensure NFH ran
+		if rec.Header().Get("X-Method-Not-Allowed-Handler") != "True" {
+			t.Errorf("TestMethodNotAllowedHandlers: Expected X-Method-Not-Allowed-Handler header")
+		}
+
+		if rec.Header().Get("Allow") == "" {
+			t.Errorf("TestMethodNotAllowedHandlers: Expected Allow header. None given")
+		}
+
+		given := strings.Split(rec.Header().Get("Allow"), ", ")
+		if len(given) != 2 {
+			t.Errorf("TestmMethodNotAllowedHandlers: Expected allow header with 2 methods. %d given", len(given))
+		}
+
+		if !((given[0] == "PATCH" && given[1] == "OPTIONS") || (given[0] == "OPTIONS" && given[1] == "PATCH")) {
+			t.Errorf("TestMethodNotAllowedHandlers: Expected allow header to contain %q, given %q", expected, given)
+		}
+
+		// Ensure global middleware ran on NFH when inheritMiddleware = true
+		expectedMw := ""
+		if inheritMiddleware {
+			expectedMw = "True"
+		}
+		if rec.Header().Get("X-Middleware-Ran") != expectedMw {
+			t.Errorf("TestMethodNotAllowedHandlers: Expected X-Middleware-Ran header")
 		}
 	}
 }
