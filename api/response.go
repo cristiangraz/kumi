@@ -38,20 +38,6 @@ type (
 		Limit   int      `json:"limit" xml:"limit"`
 		Offset  int      `json:"offset" xml:"offset"`
 	}
-
-	// Error is the format for each individual API error
-	Error struct {
-		XMLName xml.Name `xml:"error" json:"-"`
-		// Field relates to if the error is parameter-specific. You can use
-		// this to display a message near the correct form field, for example.
-		Field string `json:"field,omitempty" xml:"field,attr"`
-
-		// Code describes the kind of error that occurred.
-		Type string `json:"type" xml:"type,attr"`
-
-		// Message is a human-readable string giving more details about the error.
-		Message string `json:"message,omitempty" xml:",innerxml"`
-	}
 )
 
 // Formatter holds the ResponseFormatter to use.
