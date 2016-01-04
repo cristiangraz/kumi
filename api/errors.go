@@ -31,7 +31,8 @@ type (
 	ErrorCollection map[string]StatusError
 )
 
-// Errors ...
+// Errors holds a collection of standardized API error definitions for easy
+// error responses.
 var Errors ErrorCollection
 
 // Get is a convenience method for access the ErrorsCollection.

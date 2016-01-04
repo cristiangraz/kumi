@@ -1,12 +1,14 @@
-package api
+package formatter
 
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/cristiangraz/kumi/api"
 )
 
-// JSONFormatter formats an API response and writes it as JSON.
-func JSONFormatter(r Response, w http.ResponseWriter) error {
+// JSON formats an API response and writes it as JSON.
+func JSON(r api.Response, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(r.Status)
 

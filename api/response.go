@@ -22,7 +22,7 @@ type (
 		Code string `json:"code,omitempty" xml:"code,omitempty"`
 
 		// Holds errors.
-		Errors *[]Error `json:"errors,omitempty" xml:"errors>error,omitempty"`
+		Errors []Error `json:"errors,omitempty" xml:"errors,omitempty"`
 
 		// Data holds the data specific to the request
 		Result interface{} `json:"result,omitempty" xml:"result,omitempty"`
@@ -38,11 +38,15 @@ type (
 		Limit   int      `json:"limit" xml:"limit"`
 		Offset  int      `json:"offset" xml:"offset"`
 	}
+
+	// FormatterFn is used to format responses.
+	FormatterFn func(r Response, w http.ResponseWriter) error
 )
 
 // Formatter holds the ResponseFormatter to use.
-// The JSONFormatter is used by default and configured to display context_info.
-var Formatter = JSONFormatter
+// You must set a Formatter once before calling Send.
+// Otherwise use SendFormat.
+var Formatter FormatterFn
 
 // Success creates a new successful response.
 func Success(result interface{}) Response {
@@ -65,7 +69,7 @@ func ErrorResponse(statusCode int, errors ...Error) Response {
 		Success: false,
 		Status:  statusCode,
 		Code:    code,
-		Errors:  &errors,
+		Errors:  errors,
 	}
 }
 
@@ -78,4 +82,9 @@ func (r Response) Paging(p Paging) Response {
 // Send passes the response off to the formatter and writes it.
 func (r Response) Send(w http.ResponseWriter) error {
 	return Formatter(r, w)
+}
+
+// SendFormat sends the response using a given formatter
+func (r Response) SendFormat(w http.ResponseWriter, f FormatterFn) error {
+	return f(r, w)
 }
