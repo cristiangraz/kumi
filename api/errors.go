@@ -35,8 +35,8 @@ type (
 // error responses.
 var Errors ErrorCollection
 
-// Get is a convenience method for access the ErrorsCollection.
-func Get(errType string) StatusError {
+// GetError is a convenience method to access the ErrorCollection.
+func GetError(errType string) StatusError {
 	return Errors.Get(errType)
 }
 
@@ -55,6 +55,11 @@ func (e StatusError) Send(w http.ResponseWriter) {
 	ErrorResponse(e.StatusCode, Error{Type: e.Type, Message: e.Message}).Send(w)
 }
 
+// SendFormat sends the StatusError with no field.
+func (e StatusError) SendFormat(w http.ResponseWriter, f FormatterFn) {
+	ErrorResponse(e.StatusCode, Error{Type: e.Type, Message: e.Message}).SendFormat(w, f)
+}
+
 // SendField sends the StatusError with a specific field.
 func (e StatusError) SendField(field string, w http.ResponseWriter) {
 	ErrorResponse(e.StatusCode, Error{
@@ -62,4 +67,13 @@ func (e StatusError) SendField(field string, w http.ResponseWriter) {
 		Type:    e.Type,
 		Message: e.Message,
 	}).Send(w)
+}
+
+// SendFieldFormat sends the StatusError with a specific field.
+func (e StatusError) SendFieldFormat(field string, w http.ResponseWriter, f FormatterFn) {
+	ErrorResponse(e.StatusCode, Error{
+		Field:   field,
+		Type:    e.Type,
+		Message: e.Message,
+	}).SendFormat(w, f)
 }
