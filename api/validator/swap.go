@@ -1,6 +1,7 @@
-package api
+package validator
 
 import (
+	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -17,10 +18,10 @@ type (
 	}
 )
 
-// Validate takes schema errors and mapping rules and returns
-// an array of Error structs
-func Validate(errors []gojsonschema.ResultError, rules Rules) []Error {
-	var e []Error
+// Swap takes json schema errors and swaps them for an array of
+// api errors based on mapping rules.
+func Swap(errors []gojsonschema.ResultError, rules Rules) []api.Error {
+	var e []api.Error
 	for _, err := range errors {
 		field, errType := err.Field(), err.Type()
 		r, ok := rules[field]
@@ -38,7 +39,7 @@ func Validate(errors []gojsonschema.ResultError, rules Rules) []Error {
 
 		for _, m := range r {
 			if m.Type == errType || m.Type == "*" {
-				e = append(e, Error{
+				e = append(e, api.Error{
 					Field:   field,
 					Type:    m.ErrorType,
 					Message: m.Message,
