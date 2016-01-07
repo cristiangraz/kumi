@@ -44,6 +44,10 @@ func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request
 	defer r.Body.Close()
 	if err != nil {
 		switch err {
+		case io.ErrUnexpectedEOF:
+			// Request body exceeded
+			v.options.RequestBodyExceeded.SendFormat(w, v.options.Formatter)
+			return false
 		case io.EOF:
 			// Empty body
 			v.options.RequestBodyRequired.SendFormat(w, v.options.Formatter)
@@ -54,7 +58,15 @@ func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	document := gojsonschema.NewStringLoader(string(b.Bytes()))
+	body := string(b.Bytes())
+	if body == "{}" || body == "[]" {
+		// Empty objects and empty arrays are considered empty request
+		// bodies for the purposes of the API.
+		v.options.RequestBodyRequired.SendFormat(w, v.options.Formatter)
+		return false
+	}
+
+	document := gojsonschema.NewStringLoader(body)
 	result, err := gojsonschema.Validate(v.schema, document)
 	if err != nil {
 		switch err.(type) {

@@ -6,6 +6,7 @@ import "github.com/cristiangraz/kumi/api"
 type Options struct {
 	Formatter           api.FormatterFn
 	RequestBodyRequired api.StatusError
+	RequestBodyExceeded api.StatusError
 	InvalidJSON         api.StatusError
 	BadRequest          api.StatusError
 	Rules               Rules
