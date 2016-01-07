@@ -26,6 +26,13 @@ type (
 		StatusCode int `json:"-" xml:"-"`
 	}
 
+	// SendInput provides a means to override StatusError fields
+	// when sending.
+	SendInput struct {
+		Field   string
+		Message string
+	}
+
 	// ErrorCollection maps strings to StatusError errors. This is a
 	// good place to put standardized API error definitions.
 	ErrorCollection map[string]StatusError
@@ -60,20 +67,30 @@ func (e StatusError) SendFormat(w http.ResponseWriter, f FormatterFn) {
 	ErrorResponse(e.StatusCode, Error{Type: e.Type, Message: e.Message}).SendFormat(w, f)
 }
 
-// SendField sends the StatusError with a specific field.
-func (e StatusError) SendField(field string, w http.ResponseWriter) {
-	ErrorResponse(e.StatusCode, Error{
-		Field:   field,
-		Type:    e.Type,
-		Message: e.Message,
-	}).Send(w)
+// SendWith sends the StatusError with the input params providing overrides.
+func (e StatusError) SendWith(input SendInput, w http.ResponseWriter) {
+	se := e
+	if input.Field != "" {
+		se.Field = input.Field
+	}
+
+	if input.Message != "" {
+		se.Message = input.Message
+	}
+
+	se.Send(w)
 }
 
-// SendFieldFormat sends the StatusError with a specific field.
-func (e StatusError) SendFieldFormat(field string, w http.ResponseWriter, f FormatterFn) {
-	ErrorResponse(e.StatusCode, Error{
-		Field:   field,
-		Type:    e.Type,
-		Message: e.Message,
-	}).SendFormat(w, f)
+// SendWithFormat is like SendWith but uses a specific formatter.
+func (e StatusError) SendWithFormat(input SendInput, w http.ResponseWriter, f FormatterFn) {
+	se := e
+	if input.Field != "" {
+		se.Field = input.Field
+	}
+
+	if input.Message != "" {
+		se.Message = input.Message
+	}
+
+	se.SendFormat(w, f)
 }

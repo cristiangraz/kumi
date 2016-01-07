@@ -63,14 +63,25 @@ func TestErrors(t *testing.T) {
 		}
 
 		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-		given.SendField(fieldName, rec)
+		given.SendWith(SendInput{Field: fieldName}, rec)
 
 		err := tt.want.Error
 		err.Field = fieldName
 		ErrorResponse(tt.want.StatusCode, err).Send(expected)
 
 		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body with SendField. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
+			t.Errorf("TestErrors (%d): Wrong response body for SendWith using field. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
+		}
+
+		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
+		given.SendWith(SendInput{Message: "bla bla bla"}, rec)
+
+		err = tt.want.Error
+		err.Message = "bla bla bla"
+		ErrorResponse(tt.want.StatusCode, err).Send(expected)
+
+		if !reflect.DeepEqual(rec, expected) {
+			t.Errorf("TestErrors (%d): Wrong response body for SendWith using message. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
 		}
 	}
 }
@@ -108,14 +119,25 @@ func TestErrorsFormat(t *testing.T) {
 		}
 
 		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-		given.SendFieldFormat(fieldName, rec, formatJSON)
+		given.SendWithFormat(SendInput{Field: fieldName}, rec, formatJSON)
 
 		err := tt.want.Error
 		err.Field = fieldName
 		ErrorResponse(tt.want.StatusCode, err).SendFormat(expected, formatJSON)
 
 		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body with SendField. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
+			t.Errorf("TestErrors (%d): Wrong response body for SendWithFormat using field. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
+		}
+
+		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
+		given.SendWithFormat(SendInput{Message: "bla bla bla"}, rec, formatJSON)
+
+		err = tt.want.Error
+		err.Message = "bla bla bla"
+		ErrorResponse(tt.want.StatusCode, err).SendFormat(expected, formatJSON)
+
+		if !reflect.DeepEqual(rec, expected) {
+			t.Errorf("TestErrors (%d): Wrong response body for SendWithFormat using message. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
 		}
 	}
 }
