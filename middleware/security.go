@@ -10,14 +10,16 @@ type (
 )
 
 var (
-	// UnauthorizedHandler is called when the user is not allowed to access the resource.
-	// It should return a response.
-	// If you need custom responses, you can leave this nil and respond in your
-	// SecurityCheck before returning bool false
-	UnauthorizedHandler kumi.HandlerFunc
+	// AccessDeniedHandler is called when the user is not allowed to access
+	// a resource or perform some action.
+	// The AccessDeniedHandler is expected to return a response.
+	AccessDeniedHandler kumi.HandlerFunc
 )
 
 // Assert is used to ensure all of the expressions are true.
+// Assertions occur after authorization, so any SecurityCheck
+// that returns false will be handed off to the
+// AccessDeniedHandler.
 func Assert(expressions ...SecurityCheck) kumi.HandlerFunc {
 	return func(c *kumi.Context) {
 		if ok := securityCheck(c, false, expressions); ok {
@@ -25,13 +27,16 @@ func Assert(expressions ...SecurityCheck) kumi.HandlerFunc {
 			return
 		}
 
-		if UnauthorizedHandler != nil {
-			UnauthorizedHandler(c)
+		if AccessDeniedHandler != nil {
+			AccessDeniedHandler(c)
 		}
 	}
 }
 
-// AssertNot is used to ensure all of the expressions are false
+// AssertNot is used to ensure all of the expressions are false.
+// Assertions occur after authorization, so any SecurityCheck
+// that returns true will be handed off to the
+// AccessDeniedHandler.
 func AssertNot(expressions ...SecurityCheck) kumi.HandlerFunc {
 	return func(c *kumi.Context) {
 		if ok := securityCheck(c, true, expressions); ok {
@@ -39,8 +44,8 @@ func AssertNot(expressions ...SecurityCheck) kumi.HandlerFunc {
 			return
 		}
 
-		if UnauthorizedHandler != nil {
-			UnauthorizedHandler(c)
+		if AccessDeniedHandler != nil {
+			AccessDeniedHandler(c)
 		}
 	}
 }
