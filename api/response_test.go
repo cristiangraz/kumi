@@ -97,9 +97,19 @@ func TestResponse(t *testing.T) {
 			want:      []byte(`{"success":true,"result":{"first_name":"Jon","last_name":"Doe","age":30},"paging":{"total_count":1,"limit":20,"offset":0}}`),
 		},
 		{
+			formatter: formatJSON,
+			paging:    Paging{Count: 1, Offset: 0, Limit: 20, Order: &PagingOrder{Field: "id", Direction: "asc"}},
+			want:      []byte(`{"success":true,"result":{"first_name":"Jon","last_name":"Doe","age":30},"paging":{"total_count":1,"limit":20,"offset":0,"order":{"field":"id","direction":"asc"}}}`),
+		},
+		{
 			formatter: formatXML,
 			paging:    Paging{Count: 1, Offset: 0, Limit: 20},
 			want:      []byte(`<response><success>true</success><result><first_name>Jon</first_name><last_name>Doe</last_name><age>30</age></result><paging><total_count>1</total_count><limit>20</limit><offset>0</offset></paging></response>`),
+		},
+		{
+			formatter: formatXML,
+			paging:    Paging{Count: 1, Offset: 0, Limit: 20, Order: &PagingOrder{Field: "id", Direction: "asc"}},
+			want:      []byte(`<response><success>true</success><result><first_name>Jon</first_name><last_name>Doe</last_name><age>30</age></result><paging><total_count>1</total_count><limit>20</limit><offset>0</offset><order><field>id</field><direction>asc</direction></order></paging></response>`),
 		},
 		{
 			formatter:  formatJSON,

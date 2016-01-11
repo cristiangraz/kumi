@@ -78,7 +78,11 @@ func (e StatusError) SendWith(input SendInput, w http.ResponseWriter) {
 		se.Message = input.Message
 	}
 
-	se.Send(w)
+	ErrorResponse(se.StatusCode, Error{
+		Field:   se.Field,
+		Type:    se.Type,
+		Message: se.Message,
+	}).Send(w)
 }
 
 // SendWithFormat is like SendWith but uses a specific formatter.
@@ -92,5 +96,9 @@ func (e StatusError) SendWithFormat(input SendInput, w http.ResponseWriter, f Fo
 		se.Message = input.Message
 	}
 
-	se.SendFormat(w, f)
+	ErrorResponse(se.StatusCode, Error{
+		Field:   se.Field,
+		Type:    se.Type,
+		Message: se.Message,
+	}).SendFormat(w, f)
 }

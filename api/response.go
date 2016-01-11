@@ -33,10 +33,18 @@ type (
 
 	// Paging holds pagination information for the response
 	Paging struct {
-		XMLName xml.Name `xml:"paging" json:"-"`
-		Count   int      `json:"total_count" xml:"total_count"`
-		Limit   int      `json:"limit" xml:"limit"`
-		Offset  int      `json:"offset" xml:"offset"`
+		XMLName xml.Name     `xml:"paging" json:"-"`
+		Count   int          `json:"total_count" xml:"total_count"`
+		Limit   int          `json:"limit" xml:"limit"`
+		Offset  int          `json:"offset" xml:"offset"`
+		Order   *PagingOrder `json:"order,omitempty" xml:"order,omitempty"`
+	}
+
+	// PagingOrder is the order of the pagination.
+	PagingOrder struct {
+		XMLName   xml.Name `xml:"order" json:"-"`
+		Field     string   `json:"field,omitempty" xml:"field"`
+		Direction string   `json:"direction,omitempty" xml:"direction"`
 	}
 
 	// FormatterFn is used to format responses.
