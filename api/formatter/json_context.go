@@ -14,6 +14,9 @@ func JSONContext(r api.Response, w http.ResponseWriter) error {
 		return JSON(r, w)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(r.Status)
+
 	type alias api.Response
 	a := &struct {
 		*alias

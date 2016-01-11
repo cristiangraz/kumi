@@ -14,6 +14,9 @@ func XMLContext(r api.Response, w http.ResponseWriter) error {
 		return XML(r, w)
 	}
 
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(r.Status)
+
 	type alias api.Response
 	a := &struct {
 		*alias
