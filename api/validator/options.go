@@ -17,6 +17,6 @@ type Options struct {
 	Limit int64
 
 	// ErrorStatus is the status code to use in the response for schema errors.
-	// If left empty a 422 Unprocessable Entity code will be used.
+	// If left empty a 400 Bad Request code will be used.
 	ErrorStatus int
 }

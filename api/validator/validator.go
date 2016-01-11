@@ -13,18 +13,18 @@ import (
 // Validator is a JSON schema and validator. It holds a json schema,
 // pointer to a Validator, and optional limit for an io.LimitReader.
 type Validator struct {
-	schema  gojsonschema.JSONLoader
-	options *Options
-	limit   int64
+	Schema  gojsonschema.JSONLoader
+	Options *Options
+	Limit   int64
 }
 
 // NewValidator returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
 func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64) Validator {
 	return Validator{
-		schema:  schema,
-		options: options,
-		limit:   limit,
+		Schema:  schema,
+		Options: options,
+		Limit:   limit,
 	}
 }
 
@@ -32,10 +32,10 @@ func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64)
 // If the response is successful the dst struct will be populated.
 func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request) bool {
 	var reader io.Reader = r.Body
-	if v.limit > 0 {
-		reader = io.LimitReader(reader, v.limit)
-	} else if v.options.Limit > 0 {
-		reader = io.LimitReader(reader, v.options.Limit)
+	if v.Limit > 0 {
+		reader = io.LimitReader(reader, v.Limit)
+	} else if v.Options.Limit > 0 {
+		reader = io.LimitReader(reader, v.Options.Limit)
 	}
 
 	b := new(bytes.Buffer)
@@ -46,14 +46,14 @@ func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request
 		switch err {
 		case io.ErrUnexpectedEOF:
 			// Request body exceeded
-			v.options.RequestBodyExceeded.SendFormat(w, v.options.Formatter)
+			v.Options.RequestBodyExceeded.SendFormat(w, v.Options.Formatter)
 			return false
 		case io.EOF:
 			// Empty body
-			v.options.RequestBodyRequired.SendFormat(w, v.options.Formatter)
+			v.Options.RequestBodyRequired.SendFormat(w, v.Options.Formatter)
 			return false
 		default:
-			v.options.InvalidJSON.SendFormat(w, v.options.Formatter)
+			v.Options.InvalidJSON.SendFormat(w, v.Options.Formatter)
 			return false
 		}
 	}
@@ -62,20 +62,20 @@ func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request
 	if body == "{}" || body == "[]" {
 		// Empty objects and empty arrays are considered empty request
 		// bodies for the purposes of the API.
-		v.options.RequestBodyRequired.SendFormat(w, v.options.Formatter)
+		v.Options.RequestBodyRequired.SendFormat(w, v.Options.Formatter)
 		return false
 	}
 
 	document := gojsonschema.NewStringLoader(body)
-	result, err := gojsonschema.Validate(v.schema, document)
+	result, err := gojsonschema.Validate(v.Schema, document)
 	if err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
-			v.options.InvalidJSON.SendFormat(w, v.options.Formatter)
+			v.Options.InvalidJSON.SendFormat(w, v.Options.Formatter)
 			return false
 		default:
-			// This could mean there is an error processing your schema.
-			v.options.BadRequest.SendFormat(w, v.options.Formatter)
+			// This could mean there is an error processing the schema.
+			v.Options.BadRequest.SendFormat(w, v.Options.Formatter)
 			return false
 		}
 	}
@@ -84,13 +84,13 @@ func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request
 		return true
 	}
 
-	e := Swap(result.Errors(), v.options.Rules)
+	e := Swap(result.Errors(), v.Options.Rules)
 
-	statusCode := 422
-	if v.options.ErrorStatus > 0 {
-		statusCode = v.options.ErrorStatus
+	statusCode := http.StatusBadRequest
+	if v.Options.ErrorStatus > 0 {
+		statusCode = v.Options.ErrorStatus
 	}
-	api.ErrorResponse(statusCode, e...).SendFormat(w, v.options.Formatter)
+	api.ErrorResponse(statusCode, e...).SendFormat(w, v.Options.Formatter)
 
 	return false
 }
