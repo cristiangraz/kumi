@@ -11,7 +11,7 @@ import (
 )
 
 // formatJSON formats an API response and writes it as JSON.
-func formatJSON(r Response, w http.ResponseWriter) error {
+func formatJSON(r *Response, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(r.Status)
 
@@ -24,7 +24,7 @@ func formatJSON(r Response, w http.ResponseWriter) error {
 }
 
 // formatXML formats an API response and writes it as XML.
-func formatXML(r Response, w http.ResponseWriter) error {
+func formatXML(r *Response, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(r.Status)
 
@@ -43,7 +43,7 @@ func formatXML(r Response, w http.ResponseWriter) error {
 		Errors []Error `json:"errors,omitempty" xml:"errors>error,omitempty"`
 	}{
 		Errors: r.Errors,
-		alias:  (*alias)(&r),
+		alias:  (*alias)(r),
 	}
 
 	return xml.NewEncoder(w).Encode(a)
@@ -125,7 +125,7 @@ func TestResponse(t *testing.T) {
 		Formatter = tt.formatter
 		given := httptest.NewRecorder()
 
-		var response Response
+		var response *Response
 		if len(tt.errors) == 0 {
 			response = Success(result)
 		} else {
@@ -133,7 +133,7 @@ func TestResponse(t *testing.T) {
 		}
 
 		if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
-			response = response.Paging(tt.paging)
+			response.Paging(tt.paging)
 		}
 
 		response.Send(given)
@@ -147,7 +147,7 @@ func TestResponse(t *testing.T) {
 	for i, tt := range tests {
 		given := httptest.NewRecorder()
 
-		var response Response
+		var response *Response
 		if len(tt.errors) == 0 {
 			response = Success(result)
 		} else {
@@ -155,7 +155,7 @@ func TestResponse(t *testing.T) {
 		}
 
 		if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
-			response = response.Paging(tt.paging)
+			response.Paging(tt.paging)
 		}
 
 		response.SendFormat(given, tt.formatter)

@@ -101,7 +101,7 @@ func TestFormatters(t *testing.T) {
 		api.Formatter = tt.formatter
 		given := httptest.NewRecorder()
 
-		var response api.Response
+		var response *api.Response
 		if len(tt.errors) == 0 {
 			response = api.Success(result)
 		} else {
@@ -131,7 +131,7 @@ func TestFormatters(t *testing.T) {
 	for i, tt := range tests {
 		given := httptest.NewRecorder()
 
-		var response api.Response
+		var response *api.Response
 		if len(tt.errors) == 0 {
 			response = api.Success(result)
 		} else {

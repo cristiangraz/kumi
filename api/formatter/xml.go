@@ -8,7 +8,7 @@ import (
 )
 
 // XML formats an API response and writes it as XML.
-func XML(r api.Response, w http.ResponseWriter) error {
+func XML(r *api.Response, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(r.Status)
 
@@ -27,7 +27,7 @@ func XML(r api.Response, w http.ResponseWriter) error {
 		Errors []api.Error `json:"errors,omitempty" xml:"errors>error,omitempty"`
 	}{
 		Errors: r.Errors,
-		alias:  (*alias)(&r),
+		alias:  (*alias)(r),
 	}
 
 	return xml.NewEncoder(w).Encode(a)

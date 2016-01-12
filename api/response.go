@@ -48,7 +48,7 @@ type (
 	}
 
 	// FormatterFn is used to format responses.
-	FormatterFn func(r Response, w http.ResponseWriter) error
+	FormatterFn func(r *Response, w http.ResponseWriter) error
 )
 
 // Formatter holds the ResponseFormatter to use.
@@ -57,8 +57,8 @@ type (
 var Formatter FormatterFn
 
 // Success creates a new successful response.
-func Success(result interface{}) Response {
-	return Response{
+func Success(result interface{}) *Response {
+	return &Response{
 		Success: true,
 		Status:  http.StatusOK,
 		Result:  result,
@@ -67,13 +67,13 @@ func Success(result interface{}) Response {
 
 // ErrorResponse returns an error API response.
 // statusCode should be >= 400 and <= 599
-func ErrorResponse(statusCode int, errors ...Error) Response {
+func ErrorResponse(statusCode int, errors ...Error) *Response {
 	code := strings.Replace(strings.ToLower(http.StatusText(statusCode)), " ", "_", -1)
 	if statusCode == 422 {
 		code = "unprocessable_entity"
 	}
 
-	return Response{
+	return &Response{
 		Success: false,
 		Status:  statusCode,
 		Code:    code,
@@ -82,17 +82,17 @@ func ErrorResponse(statusCode int, errors ...Error) Response {
 }
 
 // Paging adds pagination data to the response.
-func (r Response) Paging(p Paging) Response {
+func (r *Response) Paging(p Paging) *Response {
 	r.Pagination = &p
 	return r
 }
 
 // Send passes the response off to the formatter and writes it.
-func (r Response) Send(w http.ResponseWriter) error {
+func (r *Response) Send(w http.ResponseWriter) error {
 	return Formatter(r, w)
 }
 
 // SendFormat sends the response using a given formatter
-func (r Response) SendFormat(w http.ResponseWriter, f FormatterFn) error {
+func (r *Response) SendFormat(w http.ResponseWriter, f FormatterFn) error {
 	return f(r, w)
 }

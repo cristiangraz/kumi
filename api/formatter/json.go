@@ -8,7 +8,7 @@ import (
 )
 
 // JSON formats an API response and writes it as JSON.
-func JSON(r api.Response, w http.ResponseWriter) error {
+func JSON(r *api.Response, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(r.Status)
 

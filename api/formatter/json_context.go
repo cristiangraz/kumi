@@ -9,7 +9,7 @@ import (
 
 // JSONContext formats an API response and writes it as JSON.
 // The errors are stored in a context_info object.
-func JSONContext(r api.Response, w http.ResponseWriter) error {
+func JSONContext(r *api.Response, w http.ResponseWriter) error {
 	if r.Success || r.Errors == nil {
 		return JSON(r, w)
 	}
@@ -23,7 +23,7 @@ func JSONContext(r api.Response, w http.ResponseWriter) error {
 		Context map[string][]api.Error `json:"context_info"`
 	}{
 		Context: map[string][]api.Error{"errors": r.Errors},
-		alias:   (*alias)(&r),
+		alias:   (*alias)(r),
 	}
 	a.alias.Errors = nil
 
