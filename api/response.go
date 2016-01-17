@@ -34,9 +34,9 @@ type (
 	// Paging holds pagination information for the response
 	Paging struct {
 		XMLName xml.Name     `xml:"paging" json:"-"`
-		Count   int          `json:"total_count" xml:"total_count"`
-		Limit   int          `json:"limit" xml:"limit"`
-		Offset  int          `json:"offset" xml:"offset"`
+		Count   int64        `json:"total_count" xml:"total_count"`
+		Limit   int64        `json:"limit" xml:"limit"`
+		Offset  int64        `json:"offset" xml:"offset"`
 		Order   *PagingOrder `json:"order,omitempty" xml:"order,omitempty"`
 	}
 

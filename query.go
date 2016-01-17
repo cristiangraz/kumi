@@ -35,8 +35,8 @@ func (q Query) GetDefault(name string, defaultValue string) string {
 }
 
 // GetInt attempts to convert a query string value to an integer.
-func (q Query) GetInt(name string) (int, error) {
-	return strconv.Atoi(q.Get(name))
+func (q Query) GetInt(name string) (int64, error) {
+	return strconv.ParseInt(q.Get(name), 10, 64)
 }
 
 // GetBool attempts to convert a query string value to a boolean.
