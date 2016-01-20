@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/cristiangraz/kumi/api"
@@ -20,8 +21,16 @@ type Validator struct {
 
 // NewValidator returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
-func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64) Validator {
-	return Validator{
+func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64) *Validator {
+	if options == nil {
+		log.Fatal("NewValidator: Options cannot be nil")
+	}
+
+	if err := options.Valid(); err != nil {
+		log.Fatalf("NewValidation. Invalid Options: %s", err)
+	}
+
+	return &Validator{
 		Schema:  schema,
 		Options: options,
 		Limit:   limit,
@@ -30,7 +39,7 @@ func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64)
 
 // Valid validates a request against a json schema and handles error responses.
 // If the response is successful the dst struct will be populated.
-func (v Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request) bool {
+func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request) bool {
 	var reader io.Reader = r.Body
 	if v.Limit > 0 {
 		reader = io.LimitReader(reader, v.Limit)
