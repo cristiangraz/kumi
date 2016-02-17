@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/facebookgo/grace/gracehttp"
+	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 )
 
@@ -14,6 +15,10 @@ type (
 	// Engine is the glue that holds everything together.
 	Engine struct {
 		RouterGroup
+
+		// DefaultContext is the starting context used for each request.
+		DefaultContext context.Context
+
 		pool sync.Pool
 
 		// Global CORS settings. This is used only if you attach the
@@ -34,7 +39,8 @@ type (
 // New creates a new Engine using the given Router.
 func New(r Router) *Engine {
 	e := &Engine{
-		RouterGroup: RouterGroup{},
+		RouterGroup:    RouterGroup{},
+		DefaultContext: context.Background(),
 		pool: sync.Pool{
 			New: func() interface{} {
 				return newContext(nil, nil, nil)
@@ -56,7 +62,9 @@ func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ..
 
 	c := e.pool.Get().(*Context)
 	c.reset(rw, r, handlers...)
-	c.engine = e
+
+	// Set the starting context.Context from the engine's default
+	c.Context = e.DefaultContext
 
 	// Set URL host and scheme
 	r.Host = strings.ToLower(r.Host)

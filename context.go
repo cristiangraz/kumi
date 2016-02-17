@@ -28,15 +28,8 @@ type (
 	key int
 )
 
-var (
-	// DefaultContext is the starting context used for each request.
-	DefaultContext = context.Background()
-)
-
 const (
 	panicKey key = iota
-	cacheHitKey
-	cacheTTLKey
 )
 
 // Status returns the http status code. If none has been set,
@@ -91,7 +84,7 @@ func (c *Context) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 // newContext creates a new context for the sync pool.
 func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
 	return &Context{
-		Context:        DefaultContext,
+		Context:        context.Background(),
 		Request:        r,
 		ResponseWriter: rw,
 		CacheHeaders:   cache.NewHeaders(),
@@ -105,7 +98,7 @@ func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc
 
 // reset resets the context.
 func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) {
-	c.Context = DefaultContext
+	c.Context = context.Background()
 	c.Request = r
 	c.ResponseWriter = rw
 	c.CacheHeaders = cache.NewHeaders()
@@ -113,7 +106,6 @@ func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...Han
 	c.Query = Query{r}
 	c.Params = Params{}
 
-	c.engine = nil
 	c.writeHeader = sync.Once{}
 	c.status = 0
 }
