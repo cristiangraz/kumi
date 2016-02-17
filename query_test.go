@@ -100,6 +100,43 @@ func TestQuery(t *testing.T) {
 	}
 }
 
+func TestGetIntslice(t *testing.T) {
+	tests := []struct {
+		in     string
+		valid  bool
+		expect []int64
+	}{
+		{in: "10", valid: true, expect: []int64{10}},
+		{in: "10,20", valid: true, expect: []int64{10, 20}},
+		{in: "10, 20", valid: false},
+		{in: " 10,20", valid: false},
+		{in: "asdfad", valid: false},
+		{in: "134254325234", valid: true, expect: []int64{134254325234}},
+		{in: "2340325,764343,3", valid: true, expect: []int64{2340325, 764343, 3}},
+		{in: "434,a,3245", valid: false},
+		{in: "", valid: false},
+	}
+
+	for i, tt := range tests {
+		r, _ := http.NewRequest("GET", "/", nil)
+
+		values := url.Values{}
+		values.Add("id", tt.in)
+		r.URL.RawQuery = values.Encode()
+
+		q := Query{r}
+
+		given, err := q.GetIntSlice("id")
+		if tt.valid && err != nil {
+			t.Errorf("TestGetIntSlice (%d): Expected valid response. Error: %s", i, err)
+		}
+
+		if tt.valid && !reflect.DeepEqual(given, tt.expect) {
+			t.Errorf("TestGetIntSlice (%d): Expect %v, given %v", i, tt.expect, given)
+		}
+	}
+}
+
 func TestSort(t *testing.T) {
 	suite := []struct {
 		input string

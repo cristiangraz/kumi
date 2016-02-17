@@ -1,10 +1,13 @@
 package kumi
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 type (
@@ -13,6 +16,8 @@ type (
 		request *http.Request
 	}
 )
+
+var csvIDs = regexp.MustCompile(`^[0-9]+(?:,[0-9]+)*$`)
 
 // All returns the url.Values from the request's query string.
 func (q Query) All() url.Values {
@@ -37,6 +42,27 @@ func (q Query) GetDefault(name string, defaultValue string) string {
 // GetInt attempts to convert a query string value to an integer.
 func (q Query) GetInt(name string) (int64, error) {
 	return strconv.ParseInt(q.Get(name), 10, 64)
+}
+
+// GetIntSlice returns a slice of int64s from a comma-separated list
+// of values.
+func (q Query) GetIntSlice(name string) ([]int64, error) {
+	if q.Get(name) == "" {
+		return nil, errors.New("Not found")
+	}
+
+	rawIDs := q.Get(name)
+	if !csvIDs.MatchString(rawIDs) {
+		return nil, errors.New("Invalid csv")
+	}
+
+	var slice []int64
+	for _, id := range strings.Split(rawIDs, ",") {
+		i, _ := strconv.ParseInt(id, 10, 64)
+		slice = append(slice, i)
+	}
+
+	return slice, nil
 }
 
 // GetBool attempts to convert a query string value to a boolean.
