@@ -23,6 +23,6 @@ func (p Params) GetDefault(name string, defaultValue string) string {
 }
 
 // GetInt attempts to convert a router param to an integer.
-func (p Params) GetInt(name string) (int64, error) {
-	return strconv.ParseInt(p.Get(name), 10, 64)
+func (p Params) GetInt(name string) (int, error) {
+	return strconv.Atoi(p.Get(name))
 }

@@ -40,13 +40,13 @@ func (q Query) GetDefault(name string, defaultValue string) string {
 }
 
 // GetInt attempts to convert a query string value to an integer.
-func (q Query) GetInt(name string) (int64, error) {
-	return strconv.ParseInt(q.Get(name), 10, 64)
+func (q Query) GetInt(name string) (int, error) {
+	return strconv.Atoi(q.Get(name))
 }
 
 // GetIntSlice returns a slice of int64s from a comma-separated list
 // of values.
-func (q Query) GetIntSlice(name string) ([]int64, error) {
+func (q Query) GetIntSlice(name string) ([]int, error) {
 	if q.Get(name) == "" {
 		return nil, errors.New("Not found")
 	}
@@ -56,9 +56,9 @@ func (q Query) GetIntSlice(name string) ([]int64, error) {
 		return nil, errors.New("Invalid csv")
 	}
 
-	var slice []int64
+	var slice []int
 	for _, id := range strings.Split(rawIDs, ",") {
-		i, _ := strconv.ParseInt(id, 10, 64)
+		i, _ := strconv.Atoi(id)
 		slice = append(slice, i)
 	}
 
