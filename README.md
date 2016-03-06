@@ -40,8 +40,8 @@ func main() {
 	k := kumi.New(router)
 
 	// Middleware stack
+    k.Use(middleware.Logger)
 	k.Use(middleware.Recoverer)
-	k.Use(middleware.Logger)
 	k.Use(middleware.Compressor)
 	k.Use(middleware.Minify)
 
@@ -53,7 +53,7 @@ func main() {
     // Create starting context for all requests
     ctx := context.Background()
 
-	dbConn, err := sqlx.Connect("postgres", "user=foo dbname=bar sslmode=disable")
+	dbConn, err := sql.Open("postgres", "user=foo dbname=bar sslmode=disable")
 	if err != nil {
 		panic("Connect to db failed")
 	}
@@ -76,7 +76,7 @@ func main() {
         // Get User and store in context
         var u User
         db := SQL(c.Context, "main")
-        if err := db.Get(&u, "select * from user where key = ?", c.Query.Get("key")); err != nil {
+        if err := db.QueryRow("select id, name from user where key = ?", c.Query.Get("key")).Scan(&u.ID, &u.Name); err != nil {
             c.WriteHeader(http.StatusForbidden)
             return
         }
