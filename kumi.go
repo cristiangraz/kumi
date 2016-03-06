@@ -8,7 +8,6 @@ import (
 
 	"github.com/facebookgo/grace/gracehttp"
 	"golang.org/x/net/context"
-	"golang.org/x/net/http2"
 )
 
 type (
@@ -121,10 +120,6 @@ func (brw BodylessResponseWriter) Write(b []byte) (int, error) {
 func (e *Engine) prep(servers ...*http.Server) {
 	hasHandler := true
 	for _, s := range servers {
-		if s.TLSConfig != nil {
-			http2.ConfigureServer(s, nil)
-		}
-
 		if s.Handler == nil {
 			hasHandler = false
 			s.Handler = http.DefaultServeMux
