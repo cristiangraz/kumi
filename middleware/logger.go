@@ -30,7 +30,14 @@ func Logger(c *kumi.Context) {
 			return
 		}
 
-		entry.Info("")
+		switch {
+		case c.Status() >= 500:
+			entry.Error("")
+		case c.Status() >= 400:
+			entry.Warn("")
+		default:
+			entry.Info("")
+		}
 	}()
 
 	c.Next()
