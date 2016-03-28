@@ -153,7 +153,7 @@ func (h *Headers) SensibleDefaults(header http.Header, status int) {
 	}
 
 	if cch.IsEmpty() {
-		if status == 301 {
+		if status == http.StatusMovedPermanently {
 			cch.SetPublic().SetSharedMaxAge(60)
 			cch.Add(header)
 
