@@ -1,5 +1,5 @@
 # Kumi
-Kumi is a very lightweight Go "framework" that packages [x/net/context](https://godoc.org/golang.org/x/net/context),
+Kumi is a lightweight Go "framework" that packages [x/net/context](https://godoc.org/golang.org/x/net/context),
 middleware, and routing. Rather than requiring a specific router, Kumi uses a
 router interface so you can choose the router that best suits your project.
 Kumi includes three routers by default: httprouter, httptreemux, and gorilla mux.
@@ -23,15 +23,13 @@ more sense for your project.
   to avoid buffering. This is how the compression and minification middleware work.
  * Common middleware included. Easily use other Go middleware (including anything
      compatible with ```net/http```).
- * API components (as optional sub-packages) for painless REST API development
+ * API components (as optional sub-packages) for faster API development
  * Built-in CORS handling
  * NotFound and MethodNotAllowed handlers
  * Automatic support for proper HTTP cache headers and included cache sub-package
  for easy reverse proxy/CDN integration.
  * Graceful restarts
  * HTTP/2 support when using TLS
- * Lots of examples and recipes for things like unit testing and API validation/error
- responses.
 
 ## Example
 ```go
@@ -100,44 +98,56 @@ func main() {
 }
 ```
 
-## What Kumi is not
-Kumi is our own internal starting point for many of our Go packages. We decided to
-publish it with the hopes that others would find it useful and hopefully generate
-some community contributions in the process. It's not intended to be a full-featured
-framework that includes everything everyone would need. If that's what you're looking
-for, Kumi likely isn't for you. Kumi is just our take of adding some flexibility
-and simple conveniences around net/http by grouping context, middleware, and routing.
-That's it.
+## Sub-packages
+The following sub-packages are included with Kumi for optional use:
 
-Take a look at the examples and recipes to get a feel for what Kumi can do.
+### api
+The API package simplifies sending JSON or XML responses, validating incoming JSON request bodies with JSON schema, and converting JSON schema errors to standardized API errors. You can also set an ```io.LimitReader``` to limit the max size of requests. Custom formatters can be created to change the output or output format. This package includes ```formatter``` and ```validator``` sub-packages.
 
-## Included Routers
-While you can easily use your own router by just implementing the Router interface,
-the following routers ship with Kumi:
+### async
+*Experimental*. Allows for queueing/executing asynchronous tasks. There is a channel system that queues jobs and another that controls how many workers operate on the job queue concurrently. This functionality is based on the article: [Handling 1 million requests per minute with golang](http://marcio.io/2015/07/handling-1-million-requests-per-minute-with-golang/).
 
- * github.com/julienschmidt/httprouter
- * github.com/dimfeld/httptreemux
- * github.com/gorilla/mux
+Additionally, there is an ```Invoke``` interface and an AWS Lambda implementation. It allows for invoking Lambda functions synchronously or asynchronously.
 
-If you're unsure which router to use, we recommend starting with httprouter as it
-tends to be the fastest and the simplest. If you find you have conflicting routes and
-need some more flexibility, httptreemux is a great middle ground. If you need regex routes,
-you should go with gorilla.
+### cache
+The Cache package makes it easy to set or parse proper ```Cache-Control``` headers. Kumi automatically incorporates this package and will use the ```cache.SensibleDefaults``` function to set defaults (which for the most part means all responses will be set to ```private``` unless explicitly set to something else).
 
-## Included Middleware
+### middleware
+Standard middleware functions.
+
  * Logger: Basic request logging
  * AppEngine: Wraps ```x/net/context``` on each request to get an App Engine compatible
  context.
  * Recoverer: Recovers from panics
  * Security: Create assertion middleware functions to grant or forbid access.
  * Compressor: gzip compression
+ * Minify: Minify HTML/CSS/JS/JSON responses
+
+### router
+The router package includes router implementations that implement the ```Router``` interface in Kumi. This ensures you can use one of the included routers (see below) or create your own without adjusting your implementation. The benefits are the following items (regardless of if the router specifically implements these features):
+
+ * Router groups
+ * Upstream/downstream middleware
+ * NotFound and MethodNotAllowed handlers
+ * CORS support
+
+#### Included Routers
+While you can easily use your own router by just implementing the ```Router``` interface, the following routers ship with Kumi:
+
+ * [github.com/julienschmidt/httprouter](https://github.com/julienschmidt/httprouter)
+ * [github.com/dimfeld/httptreemux](https://github.com/dimfeld/httptreemux)
+ * [github.com/gorilla/mux](https://github.com/gorilla/mux)
+
+If you're unsure which router to use, we recommend starting with httprouter as it
+tends to be the fastest and the simplest. If you find you have conflicting routes and
+need some more flexibility, httptreemux is a great middle ground. If you need regex routes,
+you should go with gorilla.
 
 ## Dependencies
  Kumi core has the following dependencies outside of the standard library:
 
-  * golang.org/x/net/context
-  * golang.org/x/net/http2 (Will be part of Go core in Go 1.6)
-  * github.com/facebookgo/grace/gracehttp
+  * [golang.org/x/net/context](https://golang.org/x/net/context)
+  * [github.com/facebookgo/grace/gracehttp](github.com/facebookgo/grace/gracehttp)
 
 ## Contributing
   If you have questions or feel like something is missing that fits in with the goal of Kumi,
@@ -159,7 +169,4 @@ a list of great projects you should check out if you like the concepts in Kumi:
  * [echo](https://github.com/labstack/echo): Sync pools inspiration for the Context
  and compress middleware.
  * [grace](https://github.com/facebookgo/grace): Graceful restarts.
- * [http2](https://godoc.org/golang.org/x/net/http2): Go HTTP/2.
- * [volatile](https://github.com/volatile/core): Very nice framework. Beautiful
- log format and color-coding that was used in the Logger middleware.
  * [alice](https://github.com/justinas/alice): Painless middleware chaining.
