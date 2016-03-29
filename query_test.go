@@ -100,7 +100,7 @@ func TestQuery(t *testing.T) {
 	}
 }
 
-func TestGetIntslice(t *testing.T) {
+func TestGetIntSlice(t *testing.T) {
 	tests := []struct {
 		in     string
 		valid  bool
@@ -133,6 +133,41 @@ func TestGetIntslice(t *testing.T) {
 
 		if tt.valid && !reflect.DeepEqual(given, tt.expect) {
 			t.Errorf("TestGetIntSlice (%d): Expect %v, given %v", i, tt.expect, given)
+		}
+	}
+}
+
+func TestGetSlice(t *testing.T) {
+	tests := []struct {
+		in     string
+		valid  bool
+		expect []string
+	}{
+		{in: "a", valid: true, expect: []string{"a"}},
+		{in: "a,b", valid: true, expect: []string{"a", "b"}},
+		{in: "a, b", valid: false},
+		{in: " a,b", valid: false},
+		{in: "abcdefghijkl", valid: true, expect: []string{"abcdefghijkl"}},
+		{in: "2340325,764343,3", valid: true, expect: []string{"2340325", "764343", "3"}},
+		{in: "", valid: false},
+	}
+
+	for i, tt := range tests {
+		r, _ := http.NewRequest("GET", "/", nil)
+
+		values := url.Values{}
+		values.Add("names", tt.in)
+		r.URL.RawQuery = values.Encode()
+
+		q := Query{r}
+
+		given, err := q.GetSlice("names")
+		if tt.valid && err != nil {
+			t.Errorf("TestGetSlice (%d): Expected valid response. Error: %s", i, err)
+		}
+
+		if tt.valid && !reflect.DeepEqual(given, tt.expect) {
+			t.Errorf("TestGetSlice (%d): Expect %v, given %v", i, tt.expect, given)
 		}
 	}
 }

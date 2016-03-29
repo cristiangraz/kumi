@@ -44,7 +44,7 @@ func (q Query) GetInt(name string) (int, error) {
 	return strconv.Atoi(q.Get(name))
 }
 
-// GetIntSlice returns a slice of int64s from a comma-separated list
+// GetIntSlice returns a slice of ints from a comma-separated list
 // of values.
 func (q Query) GetIntSlice(name string) ([]int, error) {
 	if q.Get(name) == "" {
@@ -60,6 +60,25 @@ func (q Query) GetIntSlice(name string) ([]int, error) {
 	for _, id := range strings.Split(rawIDs, ",") {
 		i, _ := strconv.Atoi(id)
 		slice = append(slice, i)
+	}
+
+	return slice, nil
+}
+
+// GetSlice returns a slice of strings from a comma-separated list
+// of values.
+func (q Query) GetSlice(name string) ([]string, error) {
+	if q.Get(name) == "" {
+		return nil, errors.New("Not found")
+	}
+
+	if strings.Contains(q.Get("name"), " ") {
+		return nil, errors.New("Invalid csv")
+	}
+
+	var slice []string
+	for _, str := range strings.Split(q.Get(name), ",") {
+		slice = append(slice, str)
 	}
 
 	return slice, nil
