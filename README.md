@@ -9,6 +9,8 @@ to make developing API endpoints simpler. The API response format is
 a subpackage, so you are still free to take a different approach if it makes
 more sense for your project.
 
+[docs](docs/README.md)
+
 ## Features
  * Fast routing with the flexibility to bring your own router
  * Sub-router and router groups
