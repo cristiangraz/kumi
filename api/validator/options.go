@@ -16,7 +16,7 @@ type Options struct {
 	Rules               Rules
 
 	// Limit is used to create an io.LimitReader when reading the request
-	// body. Consider this the global maximum... each schema can contain
+	// body. Consider this the global maximum... each validator can contain
 	// a specific limit that will override this value.
 	Limit int64
 
