@@ -22,6 +22,7 @@ type (
 // api errors based on mapping rules.
 func Swap(errors []gojsonschema.ResultError, rules Rules) []api.Error {
 	var e []api.Error
+	count := len(errors)
 	for _, err := range errors {
 		field, errType := err.Field(), err.Type()
 		r, ok := rules[field]
@@ -35,6 +36,12 @@ func Swap(errors []gojsonschema.ResultError, rules Rules) []api.Error {
 			if field == "(root)" {
 				field = ""
 			}
+		}
+
+		// The validation failed against oneOf/anyOf/allOf validation, but more errors are returned.
+		// Skip returning this error in favor of the other more specific errors.
+		if count > 1 && (errType == "number_one_of" || errType == "number_any_of" || errType == "number_all_of") {
+			continue
 		}
 
 		for _, m := range r {
