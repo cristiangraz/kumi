@@ -14,10 +14,15 @@ import (
 // Validator is a JSON schema and validator. It holds a json schema,
 // pointer to a Validator, and optional limit for an io.LimitReader.
 type Validator struct {
-	Schema  gojsonschema.JSONLoader
-	Options *Options
-	Limit   int64
+	Schema    gojsonschema.JSONLoader
+	Options   *Options
+	Limit     int64
+	secondary SecondaryValidator
 }
+
+// SecondaryValidator allows for custom validation logic if the document
+// is invalid. See NewSecondaryValidator function for more details.
+type SecondaryValidator func(dst interface{}, body string, w http.ResponseWriter, r *http.Request) (result *gojsonschema.Result, responseSent bool)
 
 // NewValidator returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
@@ -35,6 +40,18 @@ func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64)
 		Options: options,
 		Limit:   limit,
 	}
+}
+
+// NewSecondaryValidator returns a new Validator with a fallback validation function.
+// The fallback validation function is useful for returning specific error messages.
+// Example: You have a schema validation with oneOf, and if the validation fails
+// you have a fallback validator that can provide specific errors based on the
+// specific "type" that was submitted.
+func NewSecondaryValidator(schema gojsonschema.JSONLoader, options *Options, limit int64, secondary SecondaryValidator) *Validator {
+	v := NewValidator(schema, options, limit)
+	v.secondary = secondary
+
+	return v
 }
 
 // Valid validates a request against a json schema and handles error responses.
@@ -102,6 +119,17 @@ func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Reques
 
 	if result.Valid() {
 		return true
+	}
+
+	if v.secondary != nil {
+		secondaryResult, responseSent := v.secondary(dst, body, w, r)
+		if responseSent {
+			return false
+		}
+
+		if secondaryResult != nil {
+			result = secondaryResult
+		}
 	}
 
 	e := Swap(result.Errors(), v.Options.Rules)

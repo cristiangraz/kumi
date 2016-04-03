@@ -78,7 +78,7 @@ var (
 )
 
 func TestValidator(t *testing.T) {
-	var schema = `{
+	schema := `{
         "type": "object",
         "properties": {
             "name": {
@@ -210,6 +210,271 @@ func TestValidator(t *testing.T) {
 
 		if !reflect.DeepEqual(expected, w) {
 			t.Errorf("TestValidator (%d): Expected %v, given %v", i, expected.Body.String(), w.Body.String())
+		}
+	}
+}
+
+// Tests to make sure more specific validators are used to provide better/more detailed
+// error message, and that anyOf/oneOf/allOf methods are handled properly.
+func TestSecondaryValidator(t *testing.T) {
+	schema := `{
+        "type": "object",
+        "properties": {
+            "type": {
+                "type": "string",
+				"enum": ["Person", "Company"]
+            },
+            "name": {
+                "type": "string"
+            },
+			"first_name": {
+                "type": "string"
+            },
+			"last_name": {
+                "type": "string"
+            }
+        },
+        "required": ["type"],
+        "additionalProperties": false,
+
+		"oneOf": [{
+			"properties": {
+				"type": {
+					"type": "string",
+					"enum": ["Person"]
+				},
+				"first_name": {
+					"type": "string",
+					"enum": ["Jon", "Sally", "Sarah"]
+				},
+				"last_name": {
+					"type": "string"
+				}
+			},
+			"required": ["type", "first_name", "last_name"]
+		}, {
+			"properties": {
+				"type": {
+					"type": "string",
+					"enum": ["Company"]
+				},
+				"name": {
+					"type": "string"
+				}
+			},
+			"required": ["type", "name"]
+		}]
+    }`
+
+	personSchema := gojsonschema.NewStringLoader(`{
+		"properties": {
+			"type": {
+				"type": "string",
+				"enum": ["Person"]
+			},
+			"first_name": {
+				"type": "string",
+				"enum": ["Jon", "Sally", "Sarah"]
+			},
+			"last_name": {
+				"type": "string"
+			}
+		},
+		"required": ["type", "first_name", "last_name"]
+	}`)
+
+	companySchema := gojsonschema.NewStringLoader(`{
+		"properties": {
+			"type": {
+				"type": "string",
+				"enum": ["Company"]
+			},
+			"name": {
+				"type": "string"
+			}
+		},
+		"required": ["type", "name"]
+	}`)
+
+	type dest struct {
+		Type      string `json:"type"`
+		Name      string `json:"name,omitempty"`
+		FirstName string `json:"first_name,omitempty"`
+		LastName  string `json:"last_name,omitempty"`
+	}
+
+	tests := []struct {
+		schema       string
+		payload      []byte
+		expectStatus int
+		expect       []api.Error
+	}{
+		{
+			schema:       schema,
+			payload:      []byte(`{"type": "Person"}`),
+			expectStatus: 422,
+			expect: []api.Error{
+				api.Error{
+					Type:    errorCollection.Get(RequiredError).Type,
+					Message: errorCollection.Get(RequiredError).Message,
+					Field:   "first_name",
+				},
+				api.Error{
+					Type:    errorCollection.Get(RequiredError).Type,
+					Message: errorCollection.Get(RequiredError).Message,
+					Field:   "last_name",
+				},
+			},
+		},
+		{
+			schema:       schema,
+			payload:      []byte(`{"type": "Company"}`),
+			expectStatus: 422,
+			expect: []api.Error{
+				api.Error{
+					Type:    errorCollection.Get(RequiredError).Type,
+					Message: errorCollection.Get(RequiredError).Message,
+					Field:   "name",
+				},
+			},
+		},
+		{
+			schema:       schema,
+			payload:      []byte(`{"type": "Person", "first_name": "bob"}`),
+			expectStatus: 422,
+			expect: []api.Error{
+				api.Error{
+					Type:    errorCollection.Get(RequiredError).Type,
+					Message: errorCollection.Get(RequiredError).Message,
+					Field:   "last_name",
+				},
+				api.Error{
+					Type:    errorCollection.Get(InvalidValueError).Type,
+					Message: errorCollection.Get(InvalidValueError).Message,
+					Field:   "first_name",
+				},
+			},
+		},
+		{
+			schema:       schema,
+			payload:      []byte(`{"type": "Person", "first_name": "Sally"}`),
+			expectStatus: 422,
+			expect: []api.Error{
+				api.Error{
+					Type:    errorCollection.Get(RequiredError).Type,
+					Message: errorCollection.Get(RequiredError).Message,
+					Field:   "last_name",
+				},
+			},
+		},
+	}
+
+	// secondary validator
+	secondary := func(dst interface{}, body string, w http.ResponseWriter, r *http.Request) (result *gojsonschema.Result, responseSent bool) {
+		data, ok := dst.(*dest)
+		if !ok {
+			return nil, false
+		}
+
+		if data.Type == "" {
+			api.GetError(RequiredError).SendWithFormat(api.SendInput{
+				Field: "type",
+			}, w, validatorOpts.Formatter)
+			return nil, true
+		}
+
+		document := gojsonschema.NewStringLoader(body)
+
+		var err error
+		switch data.Type {
+		case "Person":
+			result, err = gojsonschema.Validate(personSchema, document)
+		case "Company":
+			result, err = gojsonschema.Validate(companySchema, document)
+		default:
+			api.GetError(InvalidValueError).SendWithFormat(api.SendInput{
+				Field: "type",
+			}, w, validatorOpts.Formatter)
+			return nil, true
+		}
+
+		if err != nil {
+			return nil, false
+		}
+
+		return result, false
+	}
+
+	for i, tt := range tests {
+		var dst dest
+
+		v := NewValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0)
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
+		if err != nil {
+			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Error creating request", i)
+		}
+		r.Header.Set("Content-Type", "application/json")
+
+		ok := v.Valid(&dst, w, r)
+		if !ok && len(tt.expect) == 0 {
+			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected no errors, one given", i)
+		}
+
+		if ok && len(tt.expect) > 0 {
+			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected errors. None given", i)
+		}
+
+		if tt.expectStatus > 0 && w.Code != tt.expectStatus {
+			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+		}
+
+		if len(tt.expect) == 0 {
+			continue
+		}
+
+		expected := httptest.NewRecorder()
+		api.ErrorResponse(tt.expectStatus, tt.expect...).SendFormat(expected, validatorOpts.Formatter)
+
+		if !reflect.DeepEqual(expected, w) {
+			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected %v, given %v", i, expected.Body.String(), w.Body.String())
+		}
+	}
+
+	// Test secondary validator
+	for i, tt := range tests {
+		var dst dest
+
+		v := NewSecondaryValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0, secondary)
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
+		if err != nil {
+			t.Errorf("TestSecondaryValidator [secondary] (%d): Error creating request", i)
+		}
+		r.Header.Set("Content-Type", "application/json")
+
+		ok := v.Valid(&dst, w, r)
+		if !ok && len(tt.expect) == 0 {
+			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected no errors, one given", i)
+		}
+
+		if ok && len(tt.expect) > 0 {
+			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected errors. None given", i)
+		}
+
+		if tt.expectStatus > 0 && w.Code != tt.expectStatus {
+			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+		}
+
+		if len(tt.expect) == 0 {
+			continue
+		}
+
+		expected := httptest.NewRecorder()
+		api.ErrorResponse(tt.expectStatus, tt.expect...).SendFormat(expected, validatorOpts.Formatter)
+
+		if !reflect.DeepEqual(expected, w) {
+			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected %v, given %v", i, expected.Body.String(), w.Body.String())
 		}
 	}
 }
