@@ -251,7 +251,7 @@ func TestSecondaryValidator(t *testing.T) {
 					"type": "string"
 				}
 			},
-			"required": ["type", "first_name", "last_name"]
+			"required": ["first_name", "last_name"]
 		}, {
 			"properties": {
 				"type": {
@@ -262,7 +262,7 @@ func TestSecondaryValidator(t *testing.T) {
 					"type": "string"
 				}
 			},
-			"required": ["type", "name"]
+			"required": ["name"]
 		}]
     }`
 
@@ -377,7 +377,8 @@ func TestSecondaryValidator(t *testing.T) {
 		}
 
 		if data.Type == "" {
-			api.GetError(RequiredError).SendWithFormat(api.SendInput{
+			w.WriteHeader(validatorOpts.ErrorStatus)
+			errorCollection.Get(RequiredError).SendWithFormat(api.SendInput{
 				Field: "type",
 			}, w, validatorOpts.Formatter)
 			return nil, true
@@ -392,7 +393,8 @@ func TestSecondaryValidator(t *testing.T) {
 		case "Company":
 			result, err = gojsonschema.Validate(companySchema, document)
 		default:
-			api.GetError(InvalidValueError).SendWithFormat(api.SendInput{
+			w.WriteHeader(validatorOpts.ErrorStatus)
+			errorCollection.Get(InvalidValueError).SendWithFormat(api.SendInput{
 				Field: "type",
 			}, w, validatorOpts.Formatter)
 			return nil, true
