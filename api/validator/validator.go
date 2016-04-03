@@ -11,6 +11,9 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
+// Swapper swaps json schema errors for api errors.
+type Swapper func(errors []gojsonschema.ResultError, rules Rules) []api.Error
+
 // Validator is a JSON schema and validator. It holds a json schema,
 // pointer to a Validator, and optional limit for an io.LimitReader.
 type Validator struct {
@@ -33,6 +36,10 @@ func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64)
 
 	if err := options.Valid(); err != nil {
 		log.Fatalf("NewValidation. Invalid Options: %s", err)
+	}
+
+	if options.Swapper == nil {
+		options.Swapper = Swap
 	}
 
 	return &Validator{

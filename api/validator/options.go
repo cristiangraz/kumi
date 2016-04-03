@@ -23,6 +23,10 @@ type Options struct {
 	// ErrorStatus is the status code to use in the response for schema errors.
 	// If left empty a 400 Bad Request code will be used.
 	ErrorStatus int
+
+	// Swapper swaps json schema errors for api errors. If none is provided,
+	// the Swap function in this package will be used.
+	Swapper Swapper
 }
 
 var (
