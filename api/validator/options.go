@@ -25,30 +25,39 @@ type Options struct {
 	ErrorStatus int
 }
 
+var (
+	errOptionsFormatterRequired                  = errors.New("Options: Formatter is required")
+	errOptionsRequestBodyHandlerRequired         = errors.New("Options: RequestBodyRequired handler is nil")
+	errOptionsRequestBodyExceededHandlerRequired = errors.New("Options: RequestBodyExceeded handler is nil")
+	errOptionsInvalidJSONHandlerRequired         = errors.New("Options: InvalidJSON handler is nil")
+	errOptionsBadRequestHandlerRequired          = errors.New("Options: BadRequest handler is nil")
+	errOptionsRulesRequired                      = errors.New("Options: At least one rule is required")
+)
+
 // Valid ensures the options are valid.
 func (o Options) Valid() error {
 	if o.Formatter == nil {
-		return errors.New("Options: Formatter is required")
+		return errOptionsFormatterRequired
 	}
 
 	if o.RequestBodyRequired.StatusCode == 0 {
-		return errors.New("Options: RequestBodyRequired handler is nil")
+		return errOptionsRequestBodyHandlerRequired
 	}
 
 	if o.RequestBodyExceeded.StatusCode == 0 {
-		return errors.New("Options: RequestBodyExceeded handler is nil")
+		return errOptionsRequestBodyExceededHandlerRequired
 	}
 
 	if o.InvalidJSON.StatusCode == 0 {
-		return errors.New("Options: InvalidJSON handler is nil")
+		return errOptionsInvalidJSONHandlerRequired
 	}
 
 	if o.BadRequest.StatusCode == 0 {
-		return errors.New("Options: BadRequest handler is nil")
+		return errOptionsBadRequestHandlerRequired
 	}
 
 	if len(o.Rules) == 0 {
-		return errors.New("Options: At least one rule is required")
+		return errOptionsRulesRequired
 	}
 
 	return nil
