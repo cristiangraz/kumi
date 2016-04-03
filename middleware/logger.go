@@ -26,13 +26,11 @@ func Logger(c *kumi.Context) {
 		})
 
 		if err := kumi.Exception(c); err != nil {
-			entry.Errorf("%v", err)
+			entry.WithError(err).Error("Recovered from panic")
 			return
 		}
 
 		switch {
-		case c.Status() >= 500:
-			entry.Error("")
 		case c.Status() >= 400:
 			entry.Warn("")
 		default:
