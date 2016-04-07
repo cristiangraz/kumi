@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-
 // Response is the response format for responding to all API requests
 type Response struct {
 	XMLName xml.Name `xml:"response" json:"-"`
@@ -34,7 +33,7 @@ type Response struct {
 // Sender interface is used by kumi to send an API response to a
 // http.ResponseWriter.
 type Sender interface {
-	func Send(http.ResponseWriter)
+	Send(http.ResponseWriter)
 }
 
 // Paging holds pagination information for the response
