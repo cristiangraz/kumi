@@ -51,6 +51,12 @@ type (
 	FormatterFn func(r *Response, w http.ResponseWriter) error
 )
 
+// Sender interface is used by kumi to send an API response to a
+// http.ResponseWriter.
+type Sender interface {
+	func Send(http.ResponseWriter)
+}
+
 // Formatter holds the ResponseFormatter to use.
 // You must set a Formatter once before calling Send.
 // Otherwise use SendFormat.
