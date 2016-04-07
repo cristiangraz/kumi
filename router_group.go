@@ -2,29 +2,27 @@ package kumi
 
 import "net/http"
 
-type (
-	// Router defines an interface that allows for interchangeable routers.
-	Router interface {
-		Handle(method string, pattern string, handlers ...HandlerFunc)
-		ServeHTTP(http.ResponseWriter, *http.Request)
-		SetEngine(*Engine)
-		Engine() *Engine
-		NotFoundHandler(...HandlerFunc)
+// Router defines an interface that allows for interchangeable routers.
+type Router interface {
+	Handle(method string, pattern string, handlers ...HandlerFunc)
+	ServeHTTP(http.ResponseWriter, *http.Request)
+	SetEngine(*Engine)
+	Engine() *Engine
+	NotFoundHandler(...HandlerFunc)
 
-		// MethodNotAllowedHandler registers handlers for MethodNotAllowed
-		// responses. The router is responsible for setting the Allow response
-		// header here.
-		MethodNotAllowedHandler(...HandlerFunc)
-		HasRoute(method string, pattern string) bool
-	}
+	// MethodNotAllowedHandler registers handlers for MethodNotAllowed
+	// responses. The router is responsible for setting the Allow response
+	// header here.
+	MethodNotAllowedHandler(...HandlerFunc)
+	HasRoute(method string, pattern string) bool
+}
 
-	// RouterGroup allows for grouping routes by a base pattern (path) and shared middleware.
-	RouterGroup struct {
-		pattern  string
-		router   Router
-		Handlers []HandlerFunc
-	}
-)
+// RouterGroup allows for grouping routes by a base pattern (path) and shared middleware.
+type RouterGroup struct {
+	pattern  string
+	router   Router
+	Handlers []HandlerFunc
+}
 
 // HTTPMethods provides an array of HTTP methods.
 var HTTPMethods = []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"}

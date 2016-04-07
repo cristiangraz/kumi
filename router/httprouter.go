@@ -8,14 +8,12 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-type (
-	// HTTPRouter wraps the httprouter.Router router and meets the
-	// kumi.Router interface.
-	HTTPRouter struct {
-		Router *httprouter.Router
-		engine *kumi.Engine
-	}
-)
+// HTTPRouter wraps the httprouter.Router router and meets the
+// kumi.Router interface.
+type HTTPRouter struct {
+	Router *httprouter.Router
+	engine *kumi.Engine
+}
 
 // NewHTTPRouter creates a new instance of a default httptreemux router.
 // If you need to set custom options, you should instantiate HTTPRouter

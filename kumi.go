@@ -10,30 +10,28 @@ import (
 	"golang.org/x/net/context"
 )
 
-type (
-	// Engine is the glue that holds everything together.
-	Engine struct {
-		RouterGroup
+// Engine is the glue that holds everything together.
+type Engine struct {
+	RouterGroup
 
-		// DefaultContext is the starting context used for each request.
-		DefaultContext context.Context
+	// DefaultContext is the starting context used for each request.
+	DefaultContext context.Context
 
-		pool sync.Pool
+	pool sync.Pool
 
-		// Global CORS settings. This is used only if you attach the
-		// Engine.CorsOptions handler to your handler chain of
-		// each route or route group.
-		// Additionally you can provide route-specific overrides
-		// for any of the settings in CorsOptions.
-		cors *CorsOptions
-	}
+	// Global CORS settings. This is used only if you attach the
+	// Engine.CorsOptions handler to your handler chain of
+	// each route or route group.
+	// Additionally you can provide route-specific overrides
+	// for any of the settings in CorsOptions.
+	cors *CorsOptions
+}
 
-	// BodylessResponseWriter wraps http.ResponseWriter, discarding
-	// anything written to the body.
-	BodylessResponseWriter struct {
-		http.ResponseWriter
-	}
-)
+// BodylessResponseWriter wraps http.ResponseWriter, discarding
+// anything written to the body.
+type BodylessResponseWriter struct {
+	http.ResponseWriter
+}
 
 // New creates a new Engine using the given Router.
 func New(r Router) *Engine {

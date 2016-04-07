@@ -2,10 +2,8 @@ package kumi
 
 import "strconv"
 
-type (
-	// Params holds router params.
-	Params map[string]string
-)
+// Params holds router params.
+type Params map[string]string
 
 // Get returns a router parameter by name.
 func (p Params) Get(name string) string {

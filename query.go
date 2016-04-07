@@ -10,12 +10,10 @@ import (
 	"strings"
 )
 
-type (
-	// Query provides useful methods to operate on the request's query string values.
-	Query struct {
-		request *http.Request
-	}
-)
+// Query provides useful methods to operate on the request's query string values.
+type Query struct {
+	request *http.Request
+}
 
 var csvIDs = regexp.MustCompile(`^[0-9]+(?:,[0-9]+)*$`)
 

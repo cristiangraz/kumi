@@ -5,38 +5,36 @@ import (
 	"net/http"
 )
 
-type (
-	// Error is the format for each individual API error
-	Error struct {
-		XMLName xml.Name `xml:"error" json:"-"`
-		// Field relates to if the error is parameter-specific. You can use
-		// this to display a message near the correct form field, for example.
-		Field string `json:"field,omitempty" xml:"field,attr"`
+// Error is the format for each individual API error
+type Error struct {
+	XMLName xml.Name `xml:"error" json:"-"`
+	// Field relates to if the error is parameter-specific. You can use
+	// this to display a message near the correct form field, for example.
+	Field string `json:"field,omitempty" xml:"field,attr"`
 
-		// Code describes the kind of error that occurred.
-		Type string `json:"type" xml:"type,attr"`
+	// Code describes the kind of error that occurred.
+	Type string `json:"type" xml:"type,attr"`
 
-		// Message is a human-readable string giving more details about the error.
-		Message string `json:"message,omitempty" xml:",innerxml"`
-	}
+	// Message is a human-readable string giving more details about the error.
+	Message string `json:"message,omitempty" xml:",innerxml"`
+}
 
-	// StatusError is an Error with an associated status code.
-	StatusError struct {
-		Error
-		StatusCode int `json:"-" xml:"-"`
-	}
+// StatusError is an Error with an associated status code.
+type StatusError struct {
+	Error
+	StatusCode int `json:"-" xml:"-"`
+}
 
-	// SendInput provides a means to override StatusError fields
-	// when sending.
-	SendInput struct {
-		Field   string
-		Message string
-	}
+// SendInput provides a means to override StatusError fields
+// when sending.
+type SendInput struct {
+	Field   string
+	Message string
+}
 
-	// ErrorCollection maps strings to StatusError errors. This is a
-	// good place to put standardized API error definitions.
-	ErrorCollection map[string]StatusError
-)
+// ErrorCollection maps strings to StatusError errors. This is a
+// good place to put standardized API error definitions.
+type ErrorCollection map[string]StatusError
 
 // Errors holds a collection of standardized API error definitions for easy
 // error responses.

@@ -8,15 +8,13 @@ import (
 	"github.com/dimfeld/httptreemux"
 )
 
-type (
-	// HTTPTreeMux wraps the httptreemux.TreeMux router and meets the
-	// kumi.Router interface.
-	HTTPTreeMux struct {
-		Router *httptreemux.TreeMux
-		engine *kumi.Engine
-		routes map[string][]string
-	}
-)
+// HTTPTreeMux wraps the httptreemux.TreeMux router and meets the
+// kumi.Router interface.
+type HTTPTreeMux struct {
+	Router *httptreemux.TreeMux
+	engine *kumi.Engine
+	routes map[string][]string
+}
 
 // NewHTTPTreeMux creates a new instance of a default httptreemux router.
 // If you need to set custom options, you should instantiate HTTPTreeMux

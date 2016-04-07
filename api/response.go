@@ -6,56 +6,55 @@ import (
 	"strings"
 )
 
-type (
-	// Response is the response format for responding to all API requests
-	Response struct {
-		XMLName xml.Name `xml:"response" json:"-"`
 
-		// Success indicates whether or not the response was successful
-		Success bool `json:"success" xml:"success"`
+// Response is the response format for responding to all API requests
+type Response struct {
+	XMLName xml.Name `xml:"response" json:"-"`
 
-		// Holds an exportable/visible status code. Errors only
-		Status int `json:"status,omitempty" xml:"status,omitempty"`
+	// Success indicates whether or not the response was successful
+	Success bool `json:"success" xml:"success"`
 
-		// Holds a text representation of the status code (i.e. not_found for 404)
-		// Errors only
-		Code string `json:"code,omitempty" xml:"code,omitempty"`
+	// Holds an exportable/visible status code. Errors only
+	Status int `json:"status,omitempty" xml:"status,omitempty"`
 
-		// Holds errors.
-		Errors []Error `json:"errors,omitempty" xml:"errors,omitempty"`
+	// Holds a text representation of the status code (i.e. not_found for 404)
+	// Errors only
+	Code string `json:"code,omitempty" xml:"code,omitempty"`
 
-		// Data holds the data specific to the request
-		Result interface{} `json:"result,omitempty" xml:"result,omitempty"`
+	// Holds errors.
+	Errors []Error `json:"errors,omitempty" xml:"errors,omitempty"`
 
-		// Pagination info
-		Pagination *Paging `json:"paging,omitempty" xml:"paging,omitempty"`
-	}
+	// Data holds the data specific to the request
+	Result interface{} `json:"result,omitempty" xml:"result,omitempty"`
 
-	// Paging holds pagination information for the response
-	Paging struct {
-		XMLName xml.Name     `xml:"paging" json:"-"`
-		Count   int          `json:"total_count" xml:"total_count"`
-		Limit   int          `json:"limit" xml:"limit"`
-		Offset  int          `json:"offset" xml:"offset"`
-		Order   *PagingOrder `json:"order,omitempty" xml:"order,omitempty"`
-	}
-
-	// PagingOrder is the order of the pagination.
-	PagingOrder struct {
-		XMLName   xml.Name `xml:"order" json:"-"`
-		Field     string   `json:"field,omitempty" xml:"field"`
-		Direction string   `json:"direction,omitempty" xml:"direction"`
-	}
-
-	// FormatterFn is used to format responses.
-	FormatterFn func(r *Response, w http.ResponseWriter) error
-)
+	// Pagination info
+	Pagination *Paging `json:"paging,omitempty" xml:"paging,omitempty"`
+}
 
 // Sender interface is used by kumi to send an API response to a
 // http.ResponseWriter.
 type Sender interface {
 	func Send(http.ResponseWriter)
 }
+
+// Paging holds pagination information for the response
+type Paging struct {
+	XMLName xml.Name     `xml:"paging" json:"-"`
+	Count   int          `json:"total_count" xml:"total_count"`
+	Limit   int          `json:"limit" xml:"limit"`
+	Offset  int          `json:"offset" xml:"offset"`
+	Order   *PagingOrder `json:"order,omitempty" xml:"order,omitempty"`
+}
+
+// PagingOrder is the order of the pagination.
+type PagingOrder struct {
+	XMLName   xml.Name `xml:"order" json:"-"`
+	Field     string   `json:"field,omitempty" xml:"field"`
+	Direction string   `json:"direction,omitempty" xml:"direction"`
+}
+
+// FormatterFn is used to format responses.
+type FormatterFn func(r *Response, w http.ResponseWriter) error
 
 // Formatter holds the ResponseFormatter to use.
 // You must set a Formatter once before calling Send.

@@ -8,16 +8,14 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type (
-	// GorillaMuxRouter wraps the mux.Router router and meets the
-	// kumi.Router interface.
-	GorillaMuxRouter struct {
-		Router   *mux.Router
-		engine   *kumi.Engine
-		routes   map[string][]string
-		notFound []kumi.HandlerFunc
-	}
-)
+// GorillaMuxRouter wraps the mux.Router router and meets the
+// kumi.Router interface.
+type GorillaMuxRouter struct {
+	Router   *mux.Router
+	engine   *kumi.Engine
+	routes   map[string][]string
+	notFound []kumi.HandlerFunc
+}
 
 // NewGorillaMuxRouter creates a new instance of a default mux.Router.
 // If you need to set custom options, you should instantiate GorillaMuxRouter

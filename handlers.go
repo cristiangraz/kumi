@@ -5,13 +5,11 @@ import (
 	"net/http"
 )
 
-type (
-	// Handler is the generic HTTP Handler
-	Handler interface{}
+// Handler is the generic HTTP Handler
+type Handler interface{}
 
-	// HandlerFunc is the HTTP handler for kumi middleware.
-	HandlerFunc func(*Context)
-)
+// HandlerFunc is the HTTP handler for kumi middleware.
+type HandlerFunc func(*Context)
 
 // h takes a Handler and returns a HandlerFunc
 func wrapHandler(handler Handler) (HandlerFunc, error) {

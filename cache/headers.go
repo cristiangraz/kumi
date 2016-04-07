@@ -8,16 +8,12 @@ import (
 	"strings"
 )
 
-type (
-	// Headers is used to generate cache-control headers.
-	Headers struct {
-		directives map[string]string
-	}
-)
+// Headers is used to generate cache-control headers.
+type Headers struct {
+	directives map[string]string
+}
 
-var (
-	rxCacheControlHeader = regexp.MustCompile(`([a-zA-Z][a-zA-Z_-]*)\s*(?:=(?:"([^"]*)"|([^ \t",;]*)))?`)
-)
+var rxCacheControlHeader = regexp.MustCompile(`([a-zA-Z][a-zA-Z_-]*)\s*(?:=(?:"([^"]*)"|([^ \t",;]*)))?`)
 
 // NewHeaders returns a Headers struct.
 func NewHeaders() *Headers {

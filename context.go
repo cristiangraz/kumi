@@ -8,25 +8,23 @@ import (
 	"golang.org/x/net/context"
 )
 
-type (
-	// Context holds contextual data for each request and
-	// implements the http.ResponseWriter interface.
-	Context struct {
-		http.ResponseWriter
-		Context      context.Context
-		Request      *http.Request
-		CacheHeaders *cache.Headers
-		Query        Query
-		Params       Params
+// Context holds contextual data for each request and
+// implements the http.ResponseWriter interface.
+type Context struct {
+	http.ResponseWriter
+	Context      context.Context
+	Request      *http.Request
+	CacheHeaders *cache.Headers
+	Query        Query
+	Params       Params
 
-		engine      *Engine
-		writeHeader sync.Once
-		handlers    []HandlerFunc
-		status      int
-	}
+	engine      *Engine
+	writeHeader sync.Once
+	handlers    []HandlerFunc
+	status      int
+}
 
-	key int
-)
+type key int
 
 const (
 	panicKey key = iota
