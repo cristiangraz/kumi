@@ -92,11 +92,11 @@ func (r *Response) Paging(p Paging) *Response {
 }
 
 // Send passes the response off to the formatter and writes it.
-func (r *Response) Send(w http.ResponseWriter) error {
-	return Formatter(r, w)
+func (r *Response) Send(w http.ResponseWriter) {
+	Formatter(r, w)
 }
 
 // SendFormat sends the response using a given formatter
-func (r *Response) SendFormat(w http.ResponseWriter, f FormatterFn) error {
-	return f(r, w)
+func (r *Response) SendFormat(w http.ResponseWriter, f FormatterFn) {
+	f(r, w)
 }
