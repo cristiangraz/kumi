@@ -1,10 +1,6 @@
 package validator
 
-import (
-	"testing"
-
-	"github.com/cristiangraz/kumi/api/formatter"
-)
+import "testing"
 
 func TestValidatorOptionsValid(t *testing.T) {
 	tests := []struct {
@@ -13,24 +9,16 @@ func TestValidatorOptionsValid(t *testing.T) {
 	}{
 		{
 			options: &Options{},
-			expect:  errOptionsFormatterRequired,
+			expect:  errOptionsRequestBodyHandlerRequired,
 		},
 		{
 			options: &Options{
-				Formatter: formatter.JSON,
-			},
-			expect: errOptionsRequestBodyHandlerRequired,
-		},
-		{
-			options: &Options{
-				Formatter:           formatter.JSON,
 				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
 			},
 			expect: errOptionsRequestBodyExceededHandlerRequired,
 		},
 		{
 			options: &Options{
-				Formatter:           formatter.JSON,
 				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
 				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
 			},
@@ -38,7 +26,6 @@ func TestValidatorOptionsValid(t *testing.T) {
 		},
 		{
 			options: &Options{
-				Formatter:           formatter.JSON,
 				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
 				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
 				InvalidJSON:         errorCollection.Get(InvalidJSONError),
@@ -47,7 +34,6 @@ func TestValidatorOptionsValid(t *testing.T) {
 		},
 		{
 			options: &Options{
-				Formatter:           formatter.JSON,
 				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
 				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
 				InvalidJSON:         errorCollection.Get(InvalidJSONError),
@@ -57,7 +43,6 @@ func TestValidatorOptionsValid(t *testing.T) {
 		},
 		{
 			options: &Options{
-				Formatter:           formatter.JSON,
 				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
 				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
 				InvalidJSON:         errorCollection.Get(InvalidJSONError),

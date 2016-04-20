@@ -8,7 +8,6 @@ import (
 
 // Options defines validation rules for validating requests.
 type Options struct {
-	Formatter           api.FormatterFn
 	RequestBodyRequired api.StatusError
 	RequestBodyExceeded api.StatusError
 	InvalidJSON         api.StatusError
@@ -40,10 +39,6 @@ var (
 
 // Valid ensures the options are valid.
 func (o Options) Valid() error {
-	if o.Formatter == nil {
-		return errOptionsFormatterRequired
-	}
-
 	if o.RequestBodyRequired.StatusCode == 0 {
 		return errOptionsRequestBodyHandlerRequired
 	}

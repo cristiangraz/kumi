@@ -24,6 +24,7 @@ const (
 	DomainAlreadyRegisteredError = "domain_already_registered"
 	InvalidContentTypeError      = "invalid_content_type"
 	RequiredError                = "required"
+	InvalidTypeError             = "invalid_type"
 	InvalidParameterError        = "invalid_parameter"
 	InvalidParametersError       = "invalid_parameters"
 	UnknownParameterError        = "unknown_parameter"
@@ -44,6 +45,7 @@ var errorCollection = api.ErrorCollection{
 	DomainAlreadyRegisteredError: {StatusCode: http.StatusConflict, Error: api.Error{Type: DomainAlreadyRegisteredError, Message: "One or more domains is not available for registration"}},
 	InvalidContentTypeError:      {StatusCode: http.StatusUnsupportedMediaType, Error: api.Error{Type: InvalidContentTypeError, Message: "Invalid or missing Content-Type header"}},
 	RequiredError:                {StatusCode: 422, Error: api.Error{Type: RequiredError, Message: "Required field missing"}},
+	InvalidTypeError:             {StatusCode: 422, Error: api.Error{Type: InvalidTypeError, Message: "Field is wrong type. See documentation for more details"}},
 	InvalidParameterError:        {StatusCode: 422, Error: api.Error{Type: InvalidParameterError, Message: "Field is invalid. See documentation for more details"}},
 	InvalidParametersError:       {StatusCode: 422, Error: api.Error{Type: InvalidParametersError, Message: "One or more parameters is invalid"}},
 	UnknownParameterError:        {StatusCode: 422, Error: api.Error{Type: UnknownParameterError, Message: "Unknown parameter sent"}},
@@ -68,14 +70,18 @@ var (
 				{Type: "number_one_of", ErrorType: InvalidParametersError, Message: "One or more parameters is invalid"},
 				{Type: "number_any_of", ErrorType: InvalidParametersError, Message: "One or more parameters is invalid"},
 				{Type: "number_all_of", ErrorType: InvalidParametersError, Message: "One or more parameters is invalid"},
+				{Type: "invalid_type", ErrorType: InvalidTypeError, Message: errorCollection.Get(InvalidTypeError).Message},
 				{Type: "*", ErrorType: InvalidParameterError, Message: "Field is invalid. See documentation for more details"},
 			},
 		},
 		Limit:       int64(1<<20) + 1, // Limit request body at 1MB
 		ErrorStatus: 422,
-		Formatter:   formatter.JSON,
 	}
 )
+
+func init() {
+	api.Formatter = formatter.JSON
+}
 
 func TestValidator(t *testing.T) {
 	schema := `{
@@ -166,8 +172,8 @@ func TestValidator(t *testing.T) {
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(InvalidParameterError).Type,
-					Message: errorCollection.Get(InvalidParameterError).Message,
+					Type:    errorCollection.Get(InvalidTypeError).Type,
+					Message: errorCollection.Get(InvalidTypeError).Message,
 					Field:   "name",
 				},
 			},
@@ -181,35 +187,40 @@ func TestValidator(t *testing.T) {
 		}
 
 		v := NewValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, tt.limit)
-		w := httptest.NewRecorder()
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
 			t.Errorf("TestValidator (%d): Error creating request", i)
 		}
 		r.Header.Set("Content-Type", "application/json")
 
-		ok := v.Valid(&tt.dst, w, r)
-		if !ok && len(tt.expect) == 0 {
-			t.Errorf("TestValidator (%d): Expected no errors, one given", i)
+		sender := v.Valid(&tt.dst, r)
+		if sender != nil && len(tt.expect) == 0 {
+			t.Errorf("TestValidator (%d): Expected no errors, one or more given", i)
 		}
 
-		if ok && len(tt.expect) > 0 {
+		if sender == nil && len(tt.expect) > 0 {
 			t.Errorf("TestValidator (%d): Expected errors. None given", i)
 		}
 
-		if tt.expectStatus > 0 && w.Code != tt.expectStatus {
-			t.Errorf("TestValidator (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+		if tt.expectStatus > 0 {
+			w := httptest.NewRecorder()
+			sender.Send(w)
+			if w.Code != tt.expectStatus {
+				t.Errorf("TestValidator (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+			}
 		}
 
 		if len(tt.expect) == 0 {
 			continue
 		}
 
-		expected := httptest.NewRecorder()
-		api.ErrorResponse(tt.expectStatus, tt.expect...).SendFormat(expected, validatorOpts.Formatter)
+		expect := httptest.NewRecorder()
+		given := httptest.NewRecorder()
+		api.ErrorResponse(tt.expectStatus, tt.expect...).Send(expect)
+		sender.Send(given)
 
-		if !reflect.DeepEqual(expected, w) {
-			t.Errorf("TestValidator (%d): Expected %v, given %v", i, expected.Body.String(), w.Body.String())
+		if !reflect.DeepEqual(expect, given) {
+			t.Errorf("TestValidator (%d): Expected %v, given %v", i, expect, given)
 		}
 	}
 }
@@ -370,18 +381,16 @@ func TestSecondaryValidator(t *testing.T) {
 	}
 
 	// secondary validator
-	secondary := func(dst interface{}, body string, w http.ResponseWriter, r *http.Request) (result *gojsonschema.Result, responseSent bool) {
+	secondary := func(dst interface{}, body string, r *http.Request) (result *gojsonschema.Result, sender api.Sender) {
 		data, ok := dst.(*dest)
 		if !ok {
-			return nil, false
+			return nil, nil
 		}
 
 		if data.Type == "" {
-			w.WriteHeader(validatorOpts.ErrorStatus)
-			errorCollection.Get(RequiredError).SendWithFormat(api.SendInput{
+			return nil, errorCollection.Get(RequiredError).With(api.SendInput{
 				Field: "type",
-			}, w, validatorOpts.Formatter)
-			return nil, true
+			})
 		}
 
 		document := gojsonschema.NewStringLoader(body)
@@ -393,53 +402,56 @@ func TestSecondaryValidator(t *testing.T) {
 		case "Company":
 			result, err = gojsonschema.Validate(companySchema, document)
 		default:
-			w.WriteHeader(validatorOpts.ErrorStatus)
-			errorCollection.Get(InvalidValueError).SendWithFormat(api.SendInput{
+			return nil, errorCollection.Get(InvalidValueError).With(api.SendInput{
 				Field: "type",
-			}, w, validatorOpts.Formatter)
-			return nil, true
+			})
 		}
 
 		if err != nil {
-			return nil, false
+			return nil, nil
 		}
 
-		return result, false
+		return result, nil
 	}
 
 	for i, tt := range tests {
 		var dst dest
 
 		v := NewValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0)
-		w := httptest.NewRecorder()
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
 			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Error creating request", i)
 		}
 		r.Header.Set("Content-Type", "application/json")
 
-		ok := v.Valid(&dst, w, r)
-		if !ok && len(tt.expect) == 0 {
+		sender := v.Valid(&dst, r)
+		if sender != nil && len(tt.expect) == 0 {
 			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected no errors, one given", i)
 		}
 
-		if ok && len(tt.expect) > 0 {
+		if sender == nil && len(tt.expect) > 0 {
 			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected errors. None given", i)
 		}
 
-		if tt.expectStatus > 0 && w.Code != tt.expectStatus {
-			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+		if tt.expectStatus > 0 {
+			w := httptest.NewRecorder()
+			sender.Send(w)
+
+			if w.Code != tt.expectStatus {
+				t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+			}
 		}
 
 		if len(tt.expect) == 0 {
 			continue
 		}
 
-		expected := httptest.NewRecorder()
-		api.ErrorResponse(tt.expectStatus, tt.expect...).SendFormat(expected, validatorOpts.Formatter)
+		expect, given := httptest.NewRecorder(), httptest.NewRecorder()
+		api.ErrorResponse(tt.expectStatus, tt.expect...).Send(expect)
+		sender.Send(given)
 
-		if !reflect.DeepEqual(expected, w) {
-			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected %v, given %v", i, expected.Body.String(), w.Body.String())
+		if !reflect.DeepEqual(expect, given) {
+			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected %v, given %v", i, expect.Body.String(), given.Body.String())
 		}
 	}
 
@@ -448,35 +460,58 @@ func TestSecondaryValidator(t *testing.T) {
 		var dst dest
 
 		v := NewSecondaryValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0, secondary)
-		w := httptest.NewRecorder()
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
 			t.Errorf("TestSecondaryValidator [secondary] (%d): Error creating request", i)
 		}
 		r.Header.Set("Content-Type", "application/json")
 
-		ok := v.Valid(&dst, w, r)
-		if !ok && len(tt.expect) == 0 {
+		sender := v.Valid(&dst, r)
+		if sender != nil && len(tt.expect) == 0 {
 			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected no errors, one given", i)
 		}
 
-		if ok && len(tt.expect) > 0 {
+		if sender == nil && len(tt.expect) > 0 {
 			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected errors. None given", i)
 		}
 
-		if tt.expectStatus > 0 && w.Code != tt.expectStatus {
-			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+		if tt.expectStatus > 0 {
+			w := httptest.NewRecorder()
+			sender.Send(w)
+
+			if w.Code != tt.expectStatus {
+				t.Errorf("TestSecondaryValidator [secondary] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+			}
 		}
 
 		if len(tt.expect) == 0 {
 			continue
 		}
 
-		expected := httptest.NewRecorder()
-		api.ErrorResponse(tt.expectStatus, tt.expect...).SendFormat(expected, validatorOpts.Formatter)
+		expect, given := httptest.NewRecorder(), httptest.NewRecorder()
+		api.ErrorResponse(tt.expectStatus, tt.expect...).Send(expect)
+		sender.Send(given)
 
-		if !reflect.DeepEqual(expected, w) {
-			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected %v, given %v", i, expected.Body.String(), w.Body.String())
+		if !reflect.DeepEqual(expect, given) {
+			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected %v, given %v", i, expect.Body.String(), given.Body.String())
 		}
 	}
 }
+
+// func TestDependency(t *testing.T) {
+// 	v := NewValidator(gojsonschema.NewStringLoader(`{
+//                 "type":"number",
+//                 "minimum": 0,
+//                 "exclusiveMinimum": true
+//             }`), validatorOpts, 0)
+// 	w := httptest.NewRecorder()
+// 	r, err := http.NewRequest("POST", "/", bytes.NewBufferString(`0`))
+// 	if err != nil {
+// 		t.Error("TestDependency: Error creating request")
+// 	}
+// 	r.Header.Set("Content-Type", "application/json")
+//
+// 	v.Valid(ioutil.Discard, w, r)
+// 	log.Println(w.Body.String())
+//
+// }

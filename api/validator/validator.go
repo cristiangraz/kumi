@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 
 	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
@@ -25,7 +26,10 @@ type Validator struct {
 
 // SecondaryValidator allows for custom validation logic if the document
 // is invalid. See NewSecondaryValidator function for more details.
-type SecondaryValidator func(dst interface{}, body string, w http.ResponseWriter, r *http.Request) (result *gojsonschema.Result, responseSent bool)
+type SecondaryValidator func(dst interface{}, body string, r *http.Request) (result *gojsonschema.Result, sender api.Sender)
+
+// Match json.UnmarshalTypeError
+var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal (?:array|object|number|string|bool) into Go value of type`)
 
 // NewValidator returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
@@ -63,7 +67,7 @@ func NewSecondaryValidator(schema gojsonschema.JSONLoader, options *Options, lim
 
 // Valid validates a request against a json schema and handles error responses.
 // If the response is successful, dst will be populated.
-func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Request) (valid bool) {
+func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 	defer r.Body.Close()
 
 	var reader io.Reader = r.Body
@@ -78,8 +82,7 @@ func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Reques
 	if err := json.NewDecoder(tee).Decode(&dst); err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
-			v.Options.InvalidJSON.SendFormat(w, v.Options.Formatter)
-			return false
+			return v.Options.InvalidJSON
 		case *json.UnmarshalTypeError:
 			// Do nothing. Let the validator catch it below so that the API caller
 			// receives specific feedback on the error.
@@ -89,21 +92,22 @@ func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Reques
 				// If there are no bytes left to read on io.LimitedReader,
 				// then we hit a RequestBodyExceeded error.
 				if lr, ok := reader.(*io.LimitedReader); ok && lr.N == 0 {
-					v.Options.RequestBodyExceeded.SendFormat(w, v.Options.Formatter)
-					return false
+					return v.Options.RequestBodyExceeded
 				}
 
 				// Empty body
 				if len(buf.Bytes()) == 0 {
-					v.Options.RequestBodyRequired.SendFormat(w, v.Options.Formatter)
-					return false
+					return v.Options.RequestBodyRequired
 				}
 
-				v.Options.InvalidJSON.SendFormat(w, v.Options.Formatter)
-				return false
+				return v.Options.InvalidJSON
 			default:
-				v.Options.InvalidJSON.SendFormat(w, v.Options.Formatter)
-				return false
+				// If not a json.UnmarshalTypeError, send InvalidJSON error.
+				// TODO: Why is Go returning an *errors.errorString rather than
+				// *json.UnmarshalTypeError that we could catch above?
+				if !rxUnmarshalTypeError.MatchString(err.Error()) {
+					return v.Options.InvalidJSON
+				}
 			}
 		}
 	}
@@ -115,23 +119,21 @@ func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
-			v.Options.InvalidJSON.SendFormat(w, v.Options.Formatter)
+			return v.Options.InvalidJSON
 		default:
 			// Most likely an error in the schema.
-			v.Options.BadRequest.SendFormat(w, v.Options.Formatter)
+			return v.Options.BadRequest
 		}
-
-		return false
 	}
 
 	if result.Valid() {
-		return true
+		return nil
 	}
 
 	if v.secondary != nil {
-		secondaryResult, responseSent := v.secondary(dst, body, w, r)
-		if responseSent {
-			return false
+		secondaryResult, sender := v.secondary(dst, body, r)
+		if sender != nil {
+			return sender
 		}
 
 		if secondaryResult != nil {
@@ -145,7 +147,6 @@ func (v *Validator) Valid(dst interface{}, w http.ResponseWriter, r *http.Reques
 	if v.Options.ErrorStatus > 0 {
 		statusCode = v.Options.ErrorStatus
 	}
-	api.ErrorResponse(statusCode, e...).SendFormat(w, v.Options.Formatter)
 
-	return false
+	return api.ErrorResponse(statusCode, e...)
 }
