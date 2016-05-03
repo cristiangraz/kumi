@@ -26,7 +26,7 @@ func Logger(c *kumi.Context) {
 		})
 
 		if err := kumi.Exception(c); err != nil {
-			entry.WithError(err).Error("Recovered from panic")
+			entry.Errorf("Recovered from panic: %v", err)
 			return
 		}
 
