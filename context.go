@@ -12,7 +12,7 @@ import (
 // implements the http.ResponseWriter interface.
 type Context struct {
 	http.ResponseWriter
-	Context      context.Context
+	context.Context
 	Request      *http.Request
 	CacheHeaders *cache.Headers
 	Query        Query
