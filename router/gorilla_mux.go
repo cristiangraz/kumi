@@ -84,47 +84,41 @@ func (router *GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 func (router *GorillaMuxRouter) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
 	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		methods := router.getMethods(r)
+		e := router.Engine()
+		var c *kumi.Context
 		if len(methods) > 0 {
 			// At least one match against an HTTP method. 405 Not Allowed
-			e := router.Engine()
-			c := e.NewContext(rw, r, h...)
-			defer e.ReturnContext(c)
+			c = e.NewContext(rw, r, h...)
 
 			c.Header().Set("Allow", strings.Join(methods, ", "))
-
-			c.Next()
 		} else {
 			// 404
 			if len(router.notFound) > 0 {
 				// 404 handler is defined by user
-				e := router.Engine()
-				c := e.NewContext(rw, r, router.notFound...)
-				defer e.ReturnContext(c)
-
-				c.Next()
+				c = e.NewContext(rw, r, router.notFound...)
 			} else {
 				// Fallback 404
-				e := router.Engine()
-				c := e.NewContext(rw, r, func(c *kumi.Context) {
+				c = e.NewContext(rw, r, func(c *kumi.Context) {
 					http.NotFoundHandler().ServeHTTP(c, c.Request)
 				})
-				defer e.ReturnContext(c)
-
-				c.Next()
 			}
 		}
+
+		defer e.ReturnContext(c)
+
+		c.Next()
 	})
 }
 
 // getMethods ...
 func (router *GorillaMuxRouter) getMethods(r *http.Request) (methods []string) {
-	match := &mux.RouteMatch{}
 	var reqCopy http.Request
 	for _, m := range kumi.HTTPMethods {
 		reqCopy = *r
 		reqCopy.Method = m
 
-		if router.Router.Match(&reqCopy, match) {
+		var routeMatch mux.RouteMatch
+		if router.Router.Match(&reqCopy, &routeMatch) && routeMatch.Route != nil {
 			methods = append(methods, m)
 		}
 	}
