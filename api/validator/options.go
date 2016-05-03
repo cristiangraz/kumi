@@ -8,10 +8,10 @@ import (
 
 // Options defines validation rules for validating requests.
 type Options struct {
-	RequestBodyRequired api.StatusError
-	RequestBodyExceeded api.StatusError
-	InvalidJSON         api.StatusError
-	BadRequest          api.StatusError
+	RequestBodyRequired api.Error
+	RequestBodyExceeded api.Error
+	InvalidJSON         api.Error
+	BadRequest          api.Error
 	Rules               Rules
 
 	// Limit is used to create an io.LimitReader when reading the request
