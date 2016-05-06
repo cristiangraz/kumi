@@ -70,7 +70,7 @@ func (e Error) Send(w http.ResponseWriter) {
 		statusCode = http.StatusBadRequest
 	}
 
-	ErrorResponse(statusCode, Error{Type: e.Type, Message: e.Message}).Send(w)
+	Failure(statusCode, Error{Type: e.Type, Message: e.Message}).Send(w)
 }
 
 // SendFormat sends the StatusError with no field.
@@ -80,11 +80,11 @@ func (e Error) SendFormat(w http.ResponseWriter, f FormatterFn) {
 		statusCode = http.StatusBadRequest
 	}
 
-	ErrorResponse(statusCode, Error{Type: e.Type, Message: e.Message}).SendFormat(w, f)
+	Failure(statusCode, Error{Type: e.Type, Message: e.Message}).SendFormat(w, f)
 }
 
 // With returns an api.Sender with the given fields.
-func (e Error) With(input SendInput) *Response {
+func (e Error) With(input SendInput) *ErrorResponse {
 	se := e
 	if input.Field != "" {
 		se.Field = input.Field
@@ -99,7 +99,7 @@ func (e Error) With(input SendInput) *Response {
 		statusCode = http.StatusBadRequest
 	}
 
-	return ErrorResponse(statusCode, Error{
+	return Failure(statusCode, Error{
 		Field:   se.Field,
 		Type:    se.Type,
 		Message: se.Message,

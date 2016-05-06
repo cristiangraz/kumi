@@ -148,5 +148,5 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 		statusCode = v.Options.ErrorStatus
 	}
 
-	return api.ErrorResponse(statusCode, e...)
+	return api.Failure(statusCode, e...)
 }

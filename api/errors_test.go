@@ -53,7 +53,7 @@ func TestErrors(t *testing.T) {
 
 		rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
 		given.Send(rec)
-		ErrorResponse(tt.want.StatusCode, tt.want).Send(expected)
+		Failure(tt.want.StatusCode, tt.want).Send(expected)
 
 		if rec.Header().Get("Content-Type") != "application/json" {
 			t.Errorf("TestErrors (%d): Wrong Content-Type. Want %q, given %q", i, "application/json", rec.Header().Get("Content-Type"))
@@ -65,7 +65,7 @@ func TestErrors(t *testing.T) {
 
 		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
 		given.SendWith(SendInput{Field: fieldName}, rec)
-		ErrorResponse(tt.want.StatusCode, Error{Type: tt.want.Type, Field: fieldName, Message: tt.want.Message}).Send(expected)
+		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Field: fieldName, Message: tt.want.Message}).Send(expected)
 
 		if !reflect.DeepEqual(rec, expected) {
 			t.Errorf("TestErrors (%d): Wrong response body for SendWith using field. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
@@ -73,7 +73,7 @@ func TestErrors(t *testing.T) {
 
 		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
 		given.SendWith(SendInput{Message: msg}, rec)
-		ErrorResponse(tt.want.StatusCode, Error{Type: tt.want.Type, Message: msg}).Send(expected)
+		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Message: msg}).Send(expected)
 
 		if !reflect.DeepEqual(rec, expected) {
 			t.Errorf("TestErrors (%d): Wrong response body for SendWith using message. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
@@ -104,7 +104,7 @@ func TestErrorsFormat(t *testing.T) {
 
 		rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
 		given.SendFormat(rec, formatJSON)
-		ErrorResponse(tt.want.StatusCode, tt.want).SendFormat(expected, formatJSON)
+		Failure(tt.want.StatusCode, tt.want).SendFormat(expected, formatJSON)
 
 		if rec.Header().Get("Content-Type") != "application/json" {
 			t.Errorf("TestErrors (%d): Wrong Content-Type. Want %q, given %q", i, "application/json", rec.Header().Get("Content-Type"))
@@ -116,7 +116,7 @@ func TestErrorsFormat(t *testing.T) {
 
 		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
 		given.With(SendInput{Field: fieldName}).SendFormat(rec, formatJSON)
-		ErrorResponse(tt.want.StatusCode, Error{Type: tt.want.Type, Field: fieldName, Message: tt.want.Message}).SendFormat(expected, formatJSON)
+		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Field: fieldName, Message: tt.want.Message}).SendFormat(expected, formatJSON)
 
 		if !reflect.DeepEqual(rec, expected) {
 			t.Errorf("TestErrors (%d): Wrong response body for SendWithFormat using field. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
@@ -124,7 +124,7 @@ func TestErrorsFormat(t *testing.T) {
 
 		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
 		given.With(SendInput{Message: "bla bla bla"}).SendFormat(rec, formatJSON)
-		ErrorResponse(tt.want.StatusCode, Error{Type: tt.want.Type, Message: msg}).SendFormat(expected, formatJSON)
+		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Message: msg}).SendFormat(expected, formatJSON)
 
 		if !reflect.DeepEqual(rec, expected) {
 			t.Errorf("TestErrors (%d): Wrong response body for SendWithFormat using message. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())

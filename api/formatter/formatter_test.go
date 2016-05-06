@@ -101,18 +101,16 @@ func TestFormatters(t *testing.T) {
 		api.Formatter = tt.formatter
 		given := httptest.NewRecorder()
 
-		var response *api.Response
 		if len(tt.errors) == 0 {
-			response = api.Success(result)
+			response := api.Success(result)
+			if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
+				response = response.Paging(tt.paging)
+			}
+
+			response.Send(given)
 		} else {
-			response = api.ErrorResponse(tt.statusCode, tt.errors...)
+			api.Failure(tt.statusCode, tt.errors...).Send(given)
 		}
-
-		if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
-			response = response.Paging(tt.paging)
-		}
-
-		response.Send(given)
 
 		if !reflect.DeepEqual(tt.want, bytes.TrimSpace(given.Body.Bytes())) {
 			t.Errorf("TestResponse (%d): Want %s, given %s", i, tt.want, given.Body)
@@ -131,18 +129,16 @@ func TestFormatters(t *testing.T) {
 	for i, tt := range tests {
 		given := httptest.NewRecorder()
 
-		var response *api.Response
 		if len(tt.errors) == 0 {
-			response = api.Success(result)
+			response := api.Success(result)
+			if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
+				response = response.Paging(tt.paging)
+			}
+
+			response.SendFormat(given, tt.formatter)
 		} else {
-			response = api.ErrorResponse(tt.statusCode, tt.errors...)
+			api.Failure(tt.statusCode, tt.errors...).SendFormat(given, tt.formatter)
 		}
-
-		if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
-			response = response.Paging(tt.paging)
-		}
-
-		response.SendFormat(given, tt.formatter)
 
 		if !reflect.DeepEqual(tt.want, bytes.TrimSpace(given.Body.Bytes())) {
 			t.Errorf("TestResponse (%d) (format): Invalid format. Want %s, given %s", i, tt.want, given.Body)

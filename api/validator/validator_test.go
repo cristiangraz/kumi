@@ -216,7 +216,7 @@ func TestValidator(t *testing.T) {
 
 		expect := httptest.NewRecorder()
 		given := httptest.NewRecorder()
-		api.ErrorResponse(tt.expectStatus, tt.expect...).Send(expect)
+		api.Failure(tt.expectStatus, tt.expect...).Send(expect)
 		sender.Send(given)
 
 		if !reflect.DeepEqual(expect, given) {
@@ -447,7 +447,7 @@ func TestSecondaryValidator(t *testing.T) {
 		}
 
 		expect, given := httptest.NewRecorder(), httptest.NewRecorder()
-		api.ErrorResponse(tt.expectStatus, tt.expect...).Send(expect)
+		api.Failure(tt.expectStatus, tt.expect...).Send(expect)
 		sender.Send(given)
 
 		if !reflect.DeepEqual(expect, given) {
@@ -489,7 +489,7 @@ func TestSecondaryValidator(t *testing.T) {
 		}
 
 		expect, given := httptest.NewRecorder(), httptest.NewRecorder()
-		api.ErrorResponse(tt.expectStatus, tt.expect...).Send(expect)
+		api.Failure(tt.expectStatus, tt.expect...).Send(expect)
 		sender.Send(given)
 
 		if !reflect.DeepEqual(expect, given) {

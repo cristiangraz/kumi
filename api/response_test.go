@@ -125,18 +125,16 @@ func TestResponse(t *testing.T) {
 		Formatter = tt.formatter
 		given := httptest.NewRecorder()
 
-		var response *Response
 		if len(tt.errors) == 0 {
-			response = Success(result)
+			response := Success(result)
+			if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
+				response.Paging(tt.paging)
+			}
+
+			response.Send(given)
 		} else {
-			response = ErrorResponse(tt.statusCode, tt.errors...)
+			Failure(tt.statusCode, tt.errors...).Send(given)
 		}
-
-		if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
-			response.Paging(tt.paging)
-		}
-
-		response.Send(given)
 
 		if !reflect.DeepEqual(tt.want, bytes.TrimSpace(given.Body.Bytes())) {
 			t.Errorf("TestResponse (%d): Want %s, given %s", i, tt.want, given.Body)
@@ -147,18 +145,16 @@ func TestResponse(t *testing.T) {
 	for i, tt := range tests {
 		given := httptest.NewRecorder()
 
-		var response *Response
 		if len(tt.errors) == 0 {
-			response = Success(result)
+			response := Success(result)
+			if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
+				response.Paging(tt.paging)
+			}
+
+			response.SendFormat(given, tt.formatter)
 		} else {
-			response = ErrorResponse(tt.statusCode, tt.errors...)
+			Failure(tt.statusCode, tt.errors...).SendFormat(given, tt.formatter)
 		}
-
-		if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
-			response.Paging(tt.paging)
-		}
-
-		response.SendFormat(given, tt.formatter)
 
 		if !reflect.DeepEqual(tt.want, bytes.TrimSpace(given.Body.Bytes())) {
 			t.Errorf("TestResponse (%d): Invalid format. Want %s, given %s", i, tt.want, given.Body)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -28,6 +29,11 @@ type Response struct {
 
 	// Pagination info
 	Pagination *Paging `json:"paging,omitempty" xml:"paging,omitempty"`
+}
+
+// ErrorResponse ...
+type ErrorResponse struct {
+	*Response
 }
 
 // Sender interface is used by kumi to send an API response to a
@@ -60,6 +66,11 @@ type FormatterFn func(r *Response, w http.ResponseWriter) error
 // Otherwise use SendFormat.
 var Formatter FormatterFn
 
+// Compile-time checks
+var _ Sender = &Response{}
+var _ Sender = &ErrorResponse{}
+var _ error = &ErrorResponse{}
+
 // Success creates a new successful response.
 func Success(result interface{}) *Response {
 	return &Response{
@@ -69,20 +80,35 @@ func Success(result interface{}) *Response {
 	}
 }
 
-// ErrorResponse returns an error API response.
+// Failure returns an error API response.
 // statusCode should be >= 400 and <= 599
-func ErrorResponse(statusCode int, errors ...Error) *Response {
+func Failure(statusCode int, errors ...Error) *ErrorResponse {
 	code := strings.Replace(strings.ToLower(http.StatusText(statusCode)), " ", "_", -1)
 	if statusCode == 422 {
 		code = "unprocessable_entity"
 	}
 
-	return &Response{
+	return &ErrorResponse{Response: &Response{
 		Success: false,
 		Status:  statusCode,
 		Code:    code,
 		Errors:  errors,
+	}}
+}
+
+// Error response implements the error interface by sending the info in
+// the first field as the error message.
+func (r ErrorResponse) Error() string {
+	if len(r.Errors) == 0 {
+		return "Unknown error"
 	}
+
+	e := r.Errors[0]
+	if e.Field == "" {
+		return e.Message
+	}
+
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
 // Paging adds pagination data to the response.
