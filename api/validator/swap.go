@@ -1,6 +1,8 @@
 package validator
 
 import (
+	"fmt"
+
 	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -18,9 +20,9 @@ type Mapping struct {
 
 // Swap takes json schema errors and swaps them for an array of
 // api errors based on mapping rules.
-func Swap(errors []gojsonschema.ResultError, rules Rules) []api.Error {
-	var e []api.Error
+func Swap(errors []gojsonschema.ResultError, rules Rules) (e []api.Error) {
 	count := len(errors)
+	used := map[string]bool{}
 	for _, err := range errors {
 		field, errType := err.Field(), err.Type()
 		r, ok := rules[field]
@@ -44,6 +46,13 @@ func Swap(errors []gojsonschema.ResultError, rules Rules) []api.Error {
 
 		for _, m := range r {
 			if m.Type == errType || m.Type == "*" {
+				// Avoid double-writing errors
+				key := fmt.Sprintf("%s_%s", field, m.ErrorType)
+				if _, ok := used[key]; ok {
+					continue
+				}
+
+				used[key] = true
 				e = append(e, api.Error{
 					Field:   field,
 					Type:    m.ErrorType,
