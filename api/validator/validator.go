@@ -29,7 +29,7 @@ type Validator struct {
 type SecondaryValidator func(dst interface{}, body string, r *http.Request) (result *gojsonschema.Result, sender api.Sender)
 
 // Match json.UnmarshalTypeError
-var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal (?:array|object|number|string|bool) into Go value of type`)
+var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into Go value of type`)
 
 // NewValidator returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
