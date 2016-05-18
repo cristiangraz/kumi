@@ -24,8 +24,19 @@ type RouterGroup struct {
 	Handlers []HandlerFunc
 }
 
+// HTTP method constants.
+const (
+	GET     = "GET"
+	HEAD    = "HEAD"
+	POST    = "POST"
+	PUT     = "PUT"
+	PATCH   = "PATCH"
+	DELETE  = "DELETE"
+	OPTIONS = "OPTIONS"
+)
+
 // HTTPMethods provides an array of HTTP methods.
-var HTTPMethods = []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"}
+var HTTPMethods = []string{GET, HEAD, POST, PUT, PATCH, OPTIONS, DELETE}
 
 // Group creates a sub-group of the router based on a route prefix. Any middleware
 // added to the group will be appended to the parent's middleware
@@ -56,22 +67,22 @@ func (g *RouterGroup) Use(handlers ...Handler) {
 // It will also register a HEAD endpoint. Kumi will automatically
 // use a bodyless response writer.
 func (g *RouterGroup) Get(pattern string, handlers ...Handler) {
-	g.handle("GET", pattern, handlers...)
+	g.handle(GET, pattern, handlers...)
 }
 
 // Post defines an HTTP POST endpoint with one or more handlers.
 func (g *RouterGroup) Post(pattern string, handlers ...Handler) {
-	g.handle("POST", pattern, handlers...)
+	g.handle(POST, pattern, handlers...)
 }
 
 // Put defines an HTTP PUT endpoint with one or more handlers.
 func (g *RouterGroup) Put(pattern string, handlers ...Handler) {
-	g.handle("PUT", pattern, handlers...)
+	g.handle(PUT, pattern, handlers...)
 }
 
 // Patch defines an HTTP PATCH endpoint with one or more handlers.
 func (g *RouterGroup) Patch(pattern string, handlers ...Handler) {
-	g.handle("PATCH", pattern, handlers...)
+	g.handle(PATCH, pattern, handlers...)
 }
 
 // Head defines an HTTP HEAD endpoint with one or more handlers.
@@ -79,7 +90,7 @@ func (g *RouterGroup) Patch(pattern string, handlers ...Handler) {
 // to define your own Head handler, define it before defining
 // the Get handler for the same pattern.
 func (g *RouterGroup) Head(pattern string, handlers ...Handler) {
-	g.handle("HEAD", pattern, handlers...)
+	g.handle(HEAD, pattern, handlers...)
 }
 
 // Options defines an HTTP OPTIONS endpoint with one or more handlers.
@@ -87,12 +98,12 @@ func (g *RouterGroup) Head(pattern string, handlers ...Handler) {
 // If you want to define your own Options handler, define it before defining
 // other methods against the same pattern.
 func (g *RouterGroup) Options(pattern string, handlers ...Handler) {
-	g.handle("OPTIONS", pattern, handlers...)
+	g.handle(OPTIONS, pattern, handlers...)
 }
 
 // Delete defines an HTTP DELETE endpoint with one or more handlers.
 func (g *RouterGroup) Delete(pattern string, handlers ...Handler) {
-	g.handle("DELETE", pattern, handlers...)
+	g.handle(DELETE, pattern, handlers...)
 }
 
 // All is a convenience function that adds a handler to
@@ -153,13 +164,13 @@ func (g *RouterGroup) handle(method, pattern string, handlers ...Handler) {
 	g.router.Handle(method, pattern, h...)
 
 	// Add OPTIONS to all CORS routes if not defined
-	if g.router.Engine().cors != nil && method != "OPTIONS" && !g.router.HasRoute("OPTIONS", pattern) {
-		g.router.Handle("OPTIONS", pattern, h...)
+	if g.router.Engine().cors != nil && method != OPTIONS && !g.router.HasRoute(OPTIONS, pattern) {
+		g.router.Handle(OPTIONS, pattern, h...)
 	}
 
 	// Add HEAD to all GET routes if no route is already defined for HEAD.
-	if method == "GET" && !g.router.HasRoute("HEAD", pattern) {
-		g.router.Handle("HEAD", pattern, h...)
+	if method == GET && !g.router.HasRoute(HEAD, pattern) {
+		g.router.Handle(HEAD, pattern, h...)
 	}
 }
 

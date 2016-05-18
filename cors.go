@@ -40,7 +40,7 @@ type CorsOptions struct {
 	AllowHeaders []string
 }
 
-var (
+const (
 	corsOrigin           = "Origin"
 	corsAllowOrigin      = "Access-Control-Allow-Origin"
 	corsAllowHeaders     = "Access-Control-Allow-Headers"
@@ -75,11 +75,11 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 	var hasGet, hasHead, hasOptions bool
 	for _, m := range ac.AllowMethods {
 		switch m {
-		case "GET":
+		case GET:
 			hasGet = true
-		case "HEAD":
+		case HEAD:
 			hasHead = true
-		case "OPTIONS":
+		case OPTIONS:
 			hasOptions = true
 		}
 	}
@@ -89,16 +89,16 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 
 	// Add HEAD to list of allowed methods when GET is allowed.
 	if hasGet && !hasHead {
-		allowMethods = append(allowMethods, "HEAD")
+		allowMethods = append(allowMethods, HEAD)
 	}
 
 	// Add OPTIONS to list of allowed methods
 	if !hasOptions {
-		allowMethods = append(allowMethods, "OPTIONS")
+		allowMethods = append(allowMethods, OPTIONS)
 	}
 
 	return func(c *Context) {
-		if c.Request.Method == "OPTIONS" {
+		if c.Request.Method == OPTIONS {
 			// All OPTIONS requests should set the Allow header.
 			c.Header().Set("Allow", strings.Join(allowMethods, ", "))
 		}
@@ -106,7 +106,7 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 		reqOrigin := c.Request.Header.Get(corsOrigin)
 		if reqOrigin == "" {
 			// This is not a CORS requests
-			if c.Request.Method == "OPTIONS" {
+			if c.Request.Method == OPTIONS {
 				c.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -153,7 +153,7 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 		}
 
 		// For OPTIONS requests, don't continue to next middleware
-		if c.Request.Method == "OPTIONS" {
+		if c.Request.Method == OPTIONS {
 			c.Header().Set(corsAllowMethods, strings.Join(allowMethods, ", "))
 			c.WriteHeader(http.StatusNoContent)
 			return
