@@ -62,7 +62,27 @@ func TestContext(t *testing.T) {
 	}
 }
 
-func TestHeadRequestsDontReturnBody(t *testing.T) {
+func TestContext_ContentTypeReturnedWhenNoneSpecified(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	k := New(&testRouter{})
+	r, _ := http.NewRequest("GET", "/", nil)
+	c := k.NewContext(rec, r, func(c *Context) {
+		c.Write([]byte("hello"))
+	})
+	c.Next()
+	k.ReturnContext(c)
+
+	if rec.Body.String() != "hello" {
+		t.Errorf("TestContentTypeReturnedWhenNoneSpecified: want=%s, actual=%s", "hello", rec.Body.String())
+	}
+
+	if actual := rec.Header().Get("Content-Type"); actual != "text/plain" {
+		t.Fatalf("unexpected content-type, want=%s, actual=%s", "text/plain", actual)
+	}
+}
+
+func TestContext_HeadRequestsDontReturnBody(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	k := New(&testRouter{})
@@ -72,7 +92,7 @@ func TestHeadRequestsDontReturnBody(t *testing.T) {
 	})
 	c.Next()
 
-	if _, ok := c.ResponseWriter.(BodylessResponseWriter); !ok {
+	if _, ok := c.ResponseWriter.(*BodylessResponseWriter); !ok {
 		t.Error("TestHeadRequestsDontReturnBody: Expected HEAD request to use BodylessResponseWriter")
 	}
 
@@ -80,6 +100,36 @@ func TestHeadRequestsDontReturnBody(t *testing.T) {
 
 	if len(rec.Body.Bytes()) > 0 {
 		t.Error("TestHeadRequestsDontReturnBody: Didn't expect any bytes to be written")
+	}
+
+	if actual := rec.Header().Get("Content-Type"); actual != "" {
+		t.Fatalf("expected content-type to be empty: %v", actual)
+	}
+}
+
+func TestContext_NoContentResponsesDontReturnBody(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	k := New(&testRouter{})
+	r, _ := http.NewRequest("GET", "/", nil)
+	c := k.NewContext(rec, r, func(c *Context) {
+		c.WriteHeader(http.StatusNoContent)
+		c.Write([]byte("hello"))
+	})
+	c.Next()
+
+	if _, ok := c.ResponseWriter.(*BodylessResponseWriter); !ok {
+		t.Error("TestNoContentResponsesDontReturnBody: Expected 204 request to use BodylessResponseWriter")
+	}
+
+	k.ReturnContext(c)
+
+	if len(rec.Body.Bytes()) > 0 {
+		t.Error("TestNoContentResponsesDontReturnBody: Didn't expect any bytes to be written")
+	}
+
+	if actual := rec.Header().Get("Content-Type"); actual != "" {
+		t.Fatalf("expected content-type to be empty: %v", actual)
 	}
 }
 
