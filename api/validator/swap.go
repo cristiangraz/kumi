@@ -2,6 +2,7 @@ package validator
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
@@ -17,6 +18,9 @@ type Mapping struct {
 	ErrorType string
 	Message   string
 }
+
+// regex to find nested fields i.e. names.0, names.1, etc
+var rxNestedFields = regexp.MustCompile(`\.[0-9]+$`)
 
 // Swap takes json schema errors and swaps them for an array of
 // api errors based on mapping rules.
@@ -35,6 +39,16 @@ func Swap(errors []gojsonschema.ResultError, rules Rules) (e []api.Error) {
 
 			if field == "(root)" {
 				field = ""
+			}
+
+			// Prevent duplicate errors for nested types
+			// TODO: tests
+			if rxNestedFields.MatchString(field) {
+				field = rxNestedFields.ReplaceAllString(field, "$1")
+				key := fmt.Sprintf("%s_%s", field, errType)
+				if _, ok := used[key]; ok {
+					continue
+				}
 			}
 		}
 
