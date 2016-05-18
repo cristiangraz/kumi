@@ -74,7 +74,7 @@ func (c *Context) Next() {
 		return
 	}
 
-	h := c.handlers[0:1][0]
+	h := c.handlers[0]
 	c.handlers = c.handlers[1:]
 
 	h(c)
@@ -87,6 +87,8 @@ func (c *Context) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 // newContext creates a new context for the sync pool.
 func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
+	var once sync.Once
+
 	return &Context{
 		Context:        context.Background(),
 		Request:        r,
@@ -95,22 +97,25 @@ func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc
 		handlers:       handlers,
 		Query:          Query{r},
 
-		writeHeader: sync.Once{},
+		writeHeader: once,
 		status:      0,
 	}
 }
 
 // reset resets the context.
 func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) {
+	var params Params
+	var once sync.Once
+
 	c.Context = context.Background()
 	c.Request = r
 	c.ResponseWriter = rw
 	c.CacheHeaders = cache.NewHeaders()
 	c.handlers = handlers
 	c.Query = Query{r}
-	c.Params = Params{}
+	c.Params = params
 
-	c.writeHeader = sync.Once{}
+	c.writeHeader = once
 	c.status = 0
 }
 
