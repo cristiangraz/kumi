@@ -53,7 +53,7 @@ func New(r Router) *Engine {
 
 // NewContext retrieves a context from the pool and sets it for the request.
 func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
-	if r.Method == "HEAD" {
+	if r.Method == HEAD {
 		rw = &BodylessResponseWriter{rw}
 	}
 
