@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"regexp"
 
+	"golang.org/x/net/context"
+
+	"github.com/cristiangraz/kumi"
 	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -31,9 +34,9 @@ type SecondaryValidator func(dst interface{}, body string, r *http.Request) (res
 // Match json.UnmarshalTypeError
 var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into Go value of type`)
 
-// NewValidator returns a new Validator. If limit > 0, the limit overwrites
+// New returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
-func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64) *Validator {
+func New(schema gojsonschema.JSONLoader, options *Options, limit int64) *Validator {
 	if options == nil {
 		log.Fatal("NewValidator: Options cannot be nil")
 	}
@@ -53,13 +56,13 @@ func NewValidator(schema gojsonschema.JSONLoader, options *Options, limit int64)
 	}
 }
 
-// NewSecondaryValidator returns a new Validator with a fallback validation function.
+// NewSecondary returns a new Validator with a fallback validation function.
 // The fallback validation function is useful for returning specific error messages.
 // Example: You have a schema validation with oneOf, and if the validation fails
 // you have a fallback validator that can provide specific errors based on the
 // specific "type" that was submitted.
-func NewSecondaryValidator(schema gojsonschema.JSONLoader, options *Options, limit int64, secondary SecondaryValidator) *Validator {
-	v := NewValidator(schema, options, limit)
+func NewSecondary(schema gojsonschema.JSONLoader, options *Options, limit int64, secondary SecondaryValidator) *Validator {
+	v := New(schema, options, limit)
 	v.secondary = secondary
 
 	return v
@@ -149,4 +152,29 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 	}
 
 	return api.Failure(statusCode, e...)
+}
+
+// ContextValidator stores the validator in the context
+// for testing.
+type ContextValidator struct {
+	*Validator
+}
+
+// NewContext returns a validator that stores the validator in context for testing.
+// Internally it just wraps Validator.
+func NewContext(schema gojsonschema.JSONLoader, options *Options, limit int64) *ContextValidator {
+	return &ContextValidator{New(schema, options, limit)}
+}
+
+// NewSecondaryContext returns a secondary validator that stores the validator
+// in context for testing.
+func NewSecondaryContext(schema gojsonschema.JSONLoader, options *Options, limit int64, secondary SecondaryValidator) *ContextValidator {
+	return &ContextValidator{NewSecondary(schema, options, limit, secondary)}
+}
+
+// Valid stores the validator in the context for testing. The *http.Request is pulled
+// out of the kumi.Context.
+func (v *ContextValidator) Valid(dst interface{}, c *kumi.Context) api.Sender {
+	c.Context = context.WithValue(c.Context, "validator", v)
+	return v.Validator.Valid(dst, c.Request)
 }

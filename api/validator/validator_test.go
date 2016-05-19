@@ -186,7 +186,7 @@ func TestValidator(t *testing.T) {
 			tt.dst = ioutil.Discard
 		}
 
-		v := NewValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, tt.limit)
+		v := New(gojsonschema.NewStringLoader(tt.schema), validatorOpts, tt.limit)
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
 			t.Errorf("TestValidator (%d): Error creating request", i)
@@ -417,7 +417,7 @@ func TestSecondaryValidator(t *testing.T) {
 	for i, tt := range tests {
 		var dst dest
 
-		v := NewValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0)
+		v := New(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0)
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
 			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Error creating request", i)
@@ -459,7 +459,7 @@ func TestSecondaryValidator(t *testing.T) {
 	for i, tt := range tests {
 		var dst dest
 
-		v := NewSecondaryValidator(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0, secondary)
+		v := NewSecondary(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0, secondary)
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
 			t.Errorf("TestSecondaryValidator [secondary] (%d): Error creating request", i)
@@ -499,7 +499,7 @@ func TestSecondaryValidator(t *testing.T) {
 }
 
 // func TestDependency(t *testing.T) {
-// 	v := NewValidator(gojsonschema.NewStringLoader(`{
+// 	v := New(gojsonschema.NewStringLoader(`{
 //                 "type":"number",
 //                 "minimum": 0,
 //                 "exclusiveMinimum": true
