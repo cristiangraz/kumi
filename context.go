@@ -43,17 +43,22 @@ func (c *Context) Status() int {
 // WriteHeader prepares the response once.
 func (c *Context) WriteHeader(s int) {
 	c.writeHeader.Do(func() {
+		hasBody := true
 		if s == http.StatusNoContent {
+			hasBody = false
 			c.ResponseWriter = &BodylessResponseWriter{c.ResponseWriter}
+		} else if _, ok := c.ResponseWriter.(*BodylessResponseWriter); ok {
+			hasBody = false
 		}
 
 		c.status = s
 		c.CacheHeaders.SensibleDefaults(c.Header(), c.Status())
 
-		if c.Header().Get("Content-Type") == "" {
-			if _, ok := c.ResponseWriter.(*BodylessResponseWriter); !ok {
-				c.Header().Set("Content-Type", "text/plain")
-			}
+		ct := c.Header().Get("Content-Type")
+		if hasBody && ct == "" {
+			c.Header().Set("Content-Type", "text/plain")
+		} else if !hasBody {
+			c.Header().Del("Content-Type")
 		}
 
 		c.ResponseWriter.WriteHeader(s)

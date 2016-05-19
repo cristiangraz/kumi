@@ -133,6 +133,26 @@ func TestContext_NoContentResponsesDontReturnBody(t *testing.T) {
 	}
 }
 
+// Even if the content-type is set, it should not be returned when
+// no body is written.
+func TestContext_ContentTypeRemovedWhenNoBody(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	k := New(&testRouter{})
+	r, _ := http.NewRequest("GET", "/", nil)
+	c := k.NewContext(rec, r, func(c *Context) {
+		c.Header().Set("Content-Type", "application/json")
+		c.WriteHeader(http.StatusNoContent)
+		c.Write([]byte("hello"))
+	})
+	c.Next()
+	k.ReturnContext(c)
+
+	if actual := rec.Header().Get("Content-Type"); actual != "" {
+		t.Fatalf("expected content-type to be empty: %v", actual)
+	}
+}
+
 // Handle ...
 func (router *testRouter) Handle(method string, path string, h ...HandlerFunc) {
 	if router.routes == nil {
