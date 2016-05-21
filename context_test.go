@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/cristiangraz/kumi/cache"
 )
 
 type (
@@ -59,6 +61,23 @@ func TestContext(t *testing.T) {
 
 	if !reflect.DeepEqual(err, Exception(c)) {
 		t.Error("TestContext: Expected exceptions to be equal")
+	}
+}
+
+func BenchmarkContext(b *testing.B) {
+	rw := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/", nil)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	rtr := &testRouter{}
+	e := New(rtr)
+	for i := 0; i < b.N; i++ {
+		c := e.NewContext(rw, r, mw1)
+
+		c.Next()
+		e.ReturnContext(c)
 	}
 }
 
@@ -150,6 +169,44 @@ func TestContext_ContentTypeRemovedWhenNoBody(t *testing.T) {
 
 	if actual := rec.Header().Get("Content-Type"); actual != "" {
 		t.Fatalf("expected content-type to be empty: %v", actual)
+	}
+}
+
+func TestContext_CacheControl(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	k := New(&testRouter{})
+	r, _ := http.NewRequest("GET", "/", nil)
+	c := k.NewContext(rec, r, func(c *Context) {
+		c.Write([]byte("hello"))
+	})
+	c.Next()
+	k.ReturnContext(c)
+
+	// When no cache-control header is sent, SensibleDefaults should be used
+	cc := cache.New()
+	if want := cc.NoCache().SetPrivate().String(); rec.Header().Get("Cache-Control") != want {
+		t.Errorf("TestContext_CacheControl: want=%s, actual=%s", want, rec.Header().Get("Cache-Control"))
+	}
+}
+
+func TestContext_ManualCacheControl(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	want := "public, s-maxage=30"
+
+	k := New(&testRouter{})
+	r, _ := http.NewRequest("GET", "/", nil)
+	c := k.NewContext(rec, r, func(c *Context) {
+		c.Header().Set("Cache-Control", want)
+		c.Write([]byte("hello"))
+	})
+	c.Next()
+	k.ReturnContext(c)
+
+	// When cache-control header is sent, it shouldn't be changed or overridden
+	if rec.Header().Get("Cache-Control") != want {
+		t.Errorf("TestContext_CacheControl: want=%s, actual=%s", want, rec.Header().Get("Cache-Control"))
 	}
 }
 

@@ -40,7 +40,11 @@ func (c *Context) Status() int {
 	return c.status
 }
 
-// WriteHeader prepares the response once.
+// WriteHeader prepares the response once. If no Cache-Control header is set,
+// one will be sent using sensible defaults. Otherwise, any Cache-Control
+// headers added to c.CacheHeaders will be sent.
+// If a 204 No Content response is being sent, or the BodylessResponseWriter is in use,
+// No Content-Type header will be sent.
 func (c *Context) WriteHeader(s int) {
 	c.writeHeader.Do(func() {
 		hasBody := true
@@ -52,7 +56,9 @@ func (c *Context) WriteHeader(s int) {
 		}
 
 		c.status = s
-		c.CacheHeaders.SensibleDefaults(c.Header(), c.Status())
+		if c.Header().Get("Cache-Control") == "" {
+			c.Header().Set("Cache-Control", c.CacheHeaders.SensibleDefaults(c.Header(), s))
+		}
 
 		ct := c.Header().Get("Content-Type")
 		if hasBody && ct == "" {
@@ -98,7 +104,7 @@ func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc
 		Context:        context.Background(),
 		Request:        r,
 		ResponseWriter: rw,
-		CacheHeaders:   cache.NewHeaders(),
+		CacheHeaders:   cache.New(),
 		handlers:       handlers,
 		Query:          Query{r},
 
@@ -115,7 +121,7 @@ func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...Han
 	c.Context = context.Background()
 	c.Request = r
 	c.ResponseWriter = rw
-	c.CacheHeaders = cache.NewHeaders()
+	c.CacheHeaders = cache.New()
 	c.handlers = handlers
 	c.Query = Query{r}
 	c.Params = params

@@ -7,23 +7,36 @@ import (
 	"testing"
 )
 
+func BenchmarkDefaults(b *testing.B) {
+	header := http.Header{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		h := New()
+		h.SensibleDefaults(header, http.StatusOK)
+		Release(h)
+	}
+}
+
 func TestParseCacheControl(t *testing.T) {
 	suite := []struct {
 		in  string
 		out *Headers
 	}{
-		{in: "", out: NewHeaders()},
-		{in: "public", out: NewHeaders().SetPublic()},
-		{in: "private", out: NewHeaders().SetPrivate()},
-		{in: "must-revalidate", out: NewHeaders().MustRevalidate()},
-		{in: "no-cache", out: NewHeaders().NoCache()},
-		{in: "public, max-age=30", out: NewHeaders().SetPublic().SetMaxAge(30)},
-		{in: "public, max-age=30, s-maxage=10", out: NewHeaders().SetPublic().SetMaxAge(30).SetSharedMaxAge(10)},
-		{in: "private, no-cache, no-transform, max-age=30, s-maxage=10", out: NewHeaders().SetPrivate().SetMaxAge(30).SetSharedMaxAge(10).NoCache().NoTransform()},
+		{out: New()},
+		{in: "public", out: New().SetPublic()},
+		{in: "private", out: New().SetPrivate()},
+		{in: "must-revalidate", out: New().MustRevalidate()},
+		{in: "no-cache", out: New().NoCache()},
+		{in: "public, max-age=30", out: New().SetPublic().SetMaxAge(30)},
+		{in: "public, max-age=30, s-maxage=10", out: New().SetPublic().SetMaxAge(30).SetSharedMaxAge(10)},
+		{in: "private, no-cache, no-transform, max-age=30, s-maxage=10", out: New().SetPrivate().SetMaxAge(30).SetSharedMaxAge(10).NoCache().NoTransform()},
 	}
 
 	for _, s := range suite {
-		parsed := parseCacheControl(s.in)
+		parsed := NewString(s.in)
 		if !reflect.DeepEqual(s.out, parsed) {
 			t.Errorf("TestParse: Expected %s, given %s", s.out, parsed)
 		}
@@ -35,55 +48,48 @@ func TestString(t *testing.T) {
 		in  *Headers
 		out string
 	}{
-		{in: NewHeaders(), out: ""},
-		{in: NewHeaders().SetPublic(), out: "public"},
-		{in: NewHeaders().SetPublic().SetPrivate(), out: "private"},
-		{in: NewHeaders().SetMaxAge(30), out: "max-age=30"},
-		{in: NewHeaders().SetSharedMaxAge(20), out: "s-maxage=20"},
-		{in: NewHeaders().SetMaxAge(30).SetSharedMaxAge(25), out: "max-age=30, s-maxage=25"},
-		{in: NewHeaders().NoTransform().NoCache().SetPublic(), out: "no-cache, no-transform, public"},
+		{in: New(), out: ""},
+		{in: New().SetPublic(), out: "public"},
+		{in: New().SetPublic().SetPrivate(), out: "private"},
+		{in: New().SetMaxAge(30), out: "max-age=30"},
+		{in: New().SetSharedMaxAge(20), out: "s-maxage=20"},
+		{in: New().SetMaxAge(30).SetSharedMaxAge(25), out: "max-age=30, s-maxage=25"},
+		{in: New().NoTransform().NoCache().SetPublic(), out: "no-cache, no-transform, public"},
+		{in: New().SetMaxAge(0), out: "max-age=0"},
+		{in: New().SetMaxAge(0).SetSharedMaxAge(0), out: "max-age=0, s-maxage=0"},
 	}
 
 	for _, s := range suite {
 		if s.out != s.in.String() {
-			t.Errorf("TestString: Expected %s, given %s", s.out, s.in)
+			t.Errorf("TestString: Expected %s, given %s", s.out, s.in.String())
 		}
 	}
 }
 
 func TestEmpty(t *testing.T) {
-	h := NewHeaders()
-	if !h.IsEmpty() {
-		t.Error("TestEmpty: Expected new headers to be empty")
+	suite := []struct {
+		in    *Headers
+		empty bool
+	}{
+		{in: New(), empty: true},
+		{in: New().NoTransform(), empty: false},
+		{in: New().NoCache(), empty: false},
+		{in: New().MustRevalidate(), empty: false},
+		{in: New().SetPublic(), empty: false},
+		{in: New().SetPublic().SetPrivate(), empty: false},
+		{in: New().SetMaxAge(30), empty: false},
+		{in: New().SetSharedMaxAge(20), empty: false},
+		{in: New().SetMaxAge(30).SetSharedMaxAge(25), empty: false},
+		{in: New().NoTransform().NoCache().SetPublic(), empty: false},
+		{in: New().SetMaxAge(0), empty: false},
+		{in: New().SetMaxAge(0).SetSharedMaxAge(0), empty: false},
 	}
 
-	if h.String() != "" {
-		t.Error("TestEmpty: Expected empty headers to return empty string")
-	}
-
-	h.NoCache()
-	if h.IsEmpty() {
-		t.Error("TestEmpty: Expected headers with directive to not be empty")
-	}
-}
-
-func TestAddRemoveDirectives(t *testing.T) {
-	h := NewHeaders()
-	if h.Has("public") {
-		t.Error("TestAddRemoveDirectives: Expected has public to return false")
-	}
-	h.AddDirective("public")
-	if !h.Has("public") {
-		t.Error("TestAddRemoveDirectives: Expected has public to return true")
-	}
-
-	h.RemoveDirective("public")
-	if !h.IsEmpty() {
-		t.Error("TestAddRemoveDirectives: Expected removing only directive would return empty")
-	}
-
-	if h.Has("public") {
-		t.Error("TestAddRemoveDirectives: Expected has public to return false after removing")
+	for i, s := range suite {
+		if s.empty != s.in.IsEmpty() {
+			t.Errorf("TestEmpty (%d): unexpected: %v", i, s.in.IsEmpty())
+		}
+		Release(s.in)
 	}
 }
 
@@ -94,87 +100,79 @@ func TestSensibleDefault(t *testing.T) {
 		expected     *Headers
 	}{
 		{
-			cacheHeaders: NewHeaders().SetPublic().SetSharedMaxAge(20),
-			expected:     NewHeaders().SetPublic().SetSharedMaxAge(20),
+			cacheHeaders: New().SetPublic().SetSharedMaxAge(20),
+			expected:     New().SetPublic().SetSharedMaxAge(20),
 		},
 		// If no cache header is defined (Cache-Control, Expires, ETag or Last-Modified),
 		// Cache-Control is set to no-cache, meaning that the response will not be cached;
 		{
-			cacheHeaders: NewHeaders(),
-			expected:     NewHeaders().SetPrivate().NoCache(),
+			cacheHeaders: New(),
+			expected:     New().SetPrivate().NoCache(),
 		},
 		{
 			headers:      map[string]string{"Cache-Control": "private"},
-			cacheHeaders: NewHeaders(),
-			expected:     NewHeaders().SetPrivate(),
+			cacheHeaders: New(),
+			expected:     New().SetPrivate(),
 		},
 		{
 			// headers take precedence over cache headers
 			headers:      map[string]string{"Cache-Control": "private"},
-			cacheHeaders: NewHeaders().SetPublic(),
-			expected:     NewHeaders().SetPrivate(),
+			cacheHeaders: New().SetPublic(),
+			expected:     New().SetPrivate(),
 		},
-		{
-			// headers take precedence over cache headers
-			// Private is still added if public/private/s-maxage not set
-			headers:      map[string]string{"Cache-Control": "no-transform"},
-			cacheHeaders: NewHeaders().SetPublic().SetMaxAge(30),
-			expected:     NewHeaders().NoTransform().SetPrivate(),
-		},
-
 		// If Cache-Control is empty (but one of the other cache headers is present), its value is
 		// set to private, must-revalidate;
 		{
 			headers:  map[string]string{"Expires": "Fri, 02 Oct 2015 22:44:20 GMT"},
-			expected: NewHeaders().SetPrivate().MustRevalidate(),
+			expected: New().SetPrivate().MustRevalidate(),
 		},
 		{
 			headers:  map[string]string{"ETag": "abc"},
-			expected: NewHeaders().SetPrivate().MustRevalidate(),
+			expected: New().SetPrivate().MustRevalidate(),
 		},
 		{
 			headers:  map[string]string{"Last-Modified": "Fri, 02 Oct 2015 22:44:20 GMT"},
-			expected: NewHeaders().SetPrivate().MustRevalidate(),
+			expected: New().SetPrivate().MustRevalidate(),
 		},
 
 		// But if at least one Cache-Control directive is set, and no public or private directives have
 		// been explicitly added, Headers adds the private directive automatically (except when s-maxage is set).
 		{
 			headers:  map[string]string{"Cache-Control": "no-transform"},
-			expected: NewHeaders().NoTransform().SetPrivate(),
+			expected: New().NoTransform().SetPrivate(),
 		},
 		{
 			headers:  map[string]string{"Cache-Control": "no-transform, no-cache"},
-			expected: NewHeaders().NoTransform().NoCache().SetPrivate(),
+			expected: New().NoTransform().NoCache().SetPrivate(),
 		},
 		{
-			cacheHeaders: NewHeaders().NoTransform(),
-			expected:     NewHeaders().NoTransform().SetPrivate(),
+			cacheHeaders: New().NoTransform(),
+			expected:     New().NoTransform().SetPrivate(),
 		},
 		{
 			headers:  map[string]string{"Cache-Control": "public, no-transform"},
-			expected: NewHeaders().NoTransform().SetPublic(),
+			expected: New().NoTransform().SetPublic(),
 		},
 		{
 			headers:  map[string]string{"Cache-Control": "no-transform, max-age=30"},
-			expected: NewHeaders().NoTransform().SetMaxAge(30).SetPrivate(),
+			expected: New().NoTransform().SetMaxAge(30).SetPrivate(),
 		},
 		{
 			// Private shouldn't be added when s-maxage is set
 			headers:      map[string]string{"Cache-Control": "no-transform, s-maxage=30"},
-			cacheHeaders: NewHeaders().NoTransform(),
-			expected:     NewHeaders().NoTransform().SetSharedMaxAge(30),
+			cacheHeaders: New().NoTransform(),
+			expected:     New().NoTransform().SetSharedMaxAge(30),
 		},
 		{
-			cacheHeaders: NewHeaders().SetPublic(),
-			expected:     NewHeaders().SetPublic(),
+			cacheHeaders: New().SetPublic(),
+			expected:     New().SetPublic(),
 		},
 		{
-			cacheHeaders: NewHeaders().SetPrivate(),
-			expected:     NewHeaders().SetPrivate(),
+			cacheHeaders: New().SetPrivate(),
+			expected:     New().SetPrivate(),
 		},
 		{
-			expected: NewHeaders().SetPrivate().NoCache(),
+			expected: New().SetPrivate().NoCache(),
 		},
 	}
 
@@ -185,12 +183,15 @@ func TestSensibleDefault(t *testing.T) {
 		}
 
 		if s.cacheHeaders == nil {
-			s.cacheHeaders = NewHeaders()
+			s.cacheHeaders = New()
 		}
 
-		s.cacheHeaders.SensibleDefaults(rec.Header(), http.StatusOK)
-		if rec.Header().Get("Cache-Control") != s.expected.String() {
-			t.Errorf("TestSensibleDefault (%d): Expected %s, given %s", i, s.expected, rec.Header().Get("Cache-Control"))
+		s.cacheHeaders.Parse(rec.Header().Get("Cache-Control"))
+		given := s.cacheHeaders.SensibleDefaults(rec.Header(), http.StatusOK)
+		if expected := s.expected.String(); given != expected {
+			t.Errorf("TestSensibleDefault (%d): Expected %s, given %s", i, expected, given)
 		}
+		Release(s.cacheHeaders)
+		Release(s.expected)
 	}
 }

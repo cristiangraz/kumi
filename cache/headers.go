@@ -1,188 +1,313 @@
 package cache
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
+	"sync"
 )
+
+type nullInt64 struct {
+	Int64 int64
+	Valid bool
+}
 
 // Headers is used to generate cache-control headers.
 type Headers struct {
-	directives map[string]string
+	b               []byte
+	public          bool
+	private         bool
+	maxAge          nullInt64 // 0 is a valid max-age
+	sharedMaxAge    nullInt64 // 0 is a valid s-maxage
+	noCache         bool
+	noStore         bool
+	noTransform     bool
+	mustRevalidate  bool
+	proxyRevalidate bool
 }
 
-var rxCacheControlHeader = regexp.MustCompile(`([a-zA-Z][a-zA-Z_-]*)\s*(?:=(?:"([^"]*)"|([^ \t",;]*)))?`)
+// Cache-Control directives.
+var (
+	private         = []byte("private")
+	public          = []byte("public")
+	maxAge          = []byte("max-age")
+	sharedMaxAge    = []byte("s-maxage")
+	noCache         = []byte("no-cache")
+	noStore         = []byte("no-store")
+	noTransform     = []byte("no-transform")
+	mustRevalidate  = []byte("must-revalidate")
+	proxyRevalidate = []byte("proxy-revalidate")
+)
 
-// NewHeaders returns a Headers struct.
-func NewHeaders() *Headers {
-	return &Headers{
-		directives: map[string]string{},
+var pool = &sync.Pool{
+	New: func() interface{} {
+		return &Headers{
+			b: make([]byte, 0, defaultByteBufferSize),
+		}
+	},
+}
+
+const defaultByteBufferSize = 128
+
+// New returns a Headers struct pulled from a sync pool.
+func New() *Headers {
+	v := pool.Get()
+	if v == nil {
+		return &Headers{
+			b: make([]byte, 0, defaultByteBufferSize),
+		}
 	}
+	return v.(*Headers)
 }
 
-// NewHeadersString returns a Headers struct from a cache-control header.
-func NewHeadersString(cc string) *Headers {
-	return parseCacheControl(cc)
+// NewString returns a Headers struct from a cache-control header.
+func NewString(cc string) *Headers {
+	h := New()
+	h.Parse(cc)
+	return h
+}
+
+// Release returns *Headers back to the pool.
+func Release(h *Headers) {
+	var ma nullInt64
+	var sma nullInt64
+	h.b = h.b[:0]
+	h.public = false
+	h.private = false
+	h.maxAge = ma
+	h.sharedMaxAge = sma
+	h.noCache = false
+	h.noStore = false
+	h.noTransform = false
+	h.mustRevalidate = false
+	h.proxyRevalidate = false
+
+	pool.Put(h)
 }
 
 // IsEmpty checks if there are zero directives.
 func (h *Headers) IsEmpty() bool {
-	return len(h.directives) == 0
-}
-
-// AddDirective adds a cache-control directive with no value
-// i.e public, private, must-revalidate
-func (h *Headers) AddDirective(name string) *Headers {
-	h.AddDirectiveValue(name, "")
-	return h
-}
-
-// AddDirectiveValue adds a cache-control directive with a value
-// i.e. max-age, s-maxage
-func (h *Headers) AddDirectiveValue(name string, value string) *Headers {
-	h.directives[name] = value
-	return h
-}
-
-// RemoveDirective removes a directive
-func (h *Headers) RemoveDirective(name string) *Headers {
-	delete(h.directives, name)
-	return h
+	if h.public == true {
+		return false
+	} else if h.private == true {
+		return false
+	} else if h.maxAge.Valid {
+		return false
+	} else if h.sharedMaxAge.Valid {
+		return false
+	} else if h.noCache == true {
+		return false
+	} else if h.noStore == true {
+		return false
+	} else if h.noTransform == true {
+		return false
+	} else if h.mustRevalidate == true {
+		return false
+	} else if h.proxyRevalidate == true {
+		return false
+	}
+	return true
 }
 
 // SetPublic lets user agents know this is a public response.
 func (h *Headers) SetPublic() *Headers {
-	return h.AddDirective("public").RemoveDirective("private")
+	h.public = true
+	h.private = false
+	return h
 }
 
 // SetPrivate lets user agents know this is a private response.
 func (h *Headers) SetPrivate() *Headers {
-	return h.AddDirective("private").RemoveDirective("public")
+	h.private = true
+	h.public = false
+	return h
 }
 
 // IsPublic checks to see if the cache-control header includes the public directive.
 func (h *Headers) IsPublic() bool {
-	return h.Has("public")
+	return h.public
 }
 
 // IsPrivate checks to see if the cache-control header includes the public directive.
 func (h *Headers) IsPrivate() bool {
-	return h.Has("private")
-}
-
-// Has returns bool true if the directive exists.
-func (h *Headers) Has(name string) bool {
-	_, ok := h.directives[name]
-	return ok
-}
-
-// Get returns a directive value by name.
-func (h *Headers) Get(name string) string {
-	if v, ok := h.directives[name]; ok {
-		return v
-	}
-
-	return ""
+	return h.private
 }
 
 // NoTransform sets a no-transform directive.
 func (h *Headers) NoTransform() *Headers {
-	return h.AddDirective("no-transform")
+	h.noTransform = true
+	return h
 }
 
 // NoCache adds a no-cache directive
 func (h *Headers) NoCache() *Headers {
-	return h.AddDirective("no-cache")
+	h.noCache = true
+	return h
+}
+
+// NoStore adds a no-store directive
+func (h *Headers) NoStore() *Headers {
+	h.noStore = true
+	return h
 }
 
 // MustRevalidate adds the must-revalidate directive.
 func (h *Headers) MustRevalidate() *Headers {
-	return h.AddDirective("must-revalidate")
+	h.mustRevalidate = true
+	return h
+}
+
+// ProxyRevalidate adds the proxy-revalidate directive.
+func (h *Headers) ProxyRevalidate() *Headers {
+	h.mustRevalidate = true
+	return h
 }
 
 // SetMaxAge sets a max age for the response.
-func (h *Headers) SetMaxAge(age int) *Headers {
-	return h.AddDirectiveValue("max-age", strconv.Itoa(age))
+func (h *Headers) SetMaxAge(age int64) *Headers {
+	h.maxAge = nullInt64{Int64: age, Valid: true}
+	return h
 }
 
 // SetSharedMaxAge sets a shared max age for the response.
-func (h *Headers) SetSharedMaxAge(age int) *Headers {
-	return h.AddDirectiveValue("s-maxage", strconv.Itoa(age))
+func (h *Headers) SetSharedMaxAge(age int64) *Headers {
+	h.sharedMaxAge = nullInt64{Int64: age, Valid: true}
+	return h
 }
+
+// convenience byte slices
+var (
+	equalSign = []byte("=")
+	separate  = []byte(", ")
+)
 
 // Strings returns the cache-control header as a string
 func (h *Headers) String() string {
-	if len(h.directives) == 0 {
+	// Because there is a finite number of fields, the fields are appended in
+	// alphabetical order so we don't need a sorting algorithm.
+	// The fields are appended to a byte buffer to minimize allocations.
+	if h.maxAge.Valid {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = appendByteSlices(h.b, maxAge, equalSign)
+		h.b = append(h.b, strconv.FormatInt(h.maxAge.Int64, 10)...)
+	}
+	if h.mustRevalidate {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, mustRevalidate...)
+	}
+	if h.noCache {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, noCache...)
+	}
+	if h.noStore {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, noStore...)
+	}
+	if h.noTransform {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, noTransform...)
+	}
+	if h.proxyRevalidate {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, proxyRevalidate...)
+	}
+	if h.public {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, public...)
+	}
+	if h.private {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = append(h.b, private...)
+	}
+	if h.sharedMaxAge.Valid {
+		if len(h.b) > 0 {
+			h.b = append(h.b, separate...)
+		}
+		h.b = appendByteSlices(h.b, sharedMaxAge, equalSign)
+		h.b = append(h.b, strconv.FormatInt(h.sharedMaxAge.Int64, 10)...)
+	}
+
+	if len(h.b) == 0 {
 		return ""
 	}
+	return string(h.b)
+}
 
-	var parts []string
-	keys, values := sortMap(h.directives, false)
-	for i, k := range keys {
-		v := values[i]
-		if v == "" {
-			parts = append(parts, k)
-		} else {
-			parts = append(parts, fmt.Sprintf("%s=%s", k, v))
-		}
+func appendByteSlices(bb []byte, b ...[]byte) []byte {
+	for _, buf := range b {
+		bb = append(bb, buf...)
 	}
-
-	return strings.Join(parts, ", ")
+	return bb
 }
 
-// Add adds the Cache-Control header to an http.Header
-func (h *Headers) Add(header http.Header) {
-	header.Set("Cache-Control", h.String())
-}
-
-// SensibleDefaults sets sensible defaults -- taking into consideration any existing
-// Cache-Control headers and other cache-headers.
-// If http.Header has Cache-Control headers set, those will take precedence over anything
-// in Headers. Follow's Symfony's guidelines for defaults:
+// SensibleDefaults sets sensible defaults for the Cache-Control header.
+// Follow's Symfony's guidelines for defaults:
 // http://symfony.com/doc/current/book/http_cache.html#caching-rules-and-defaults
-func (h *Headers) SensibleDefaults(header http.Header, status int) {
-	cch := NewHeadersString(header.Get("Cache-Control"))
-	if cch.IsEmpty() {
-		cch = h
-	}
-
-	if cch.IsEmpty() {
+func (h *Headers) SensibleDefaults(header http.Header, status int) string {
+	if h.IsEmpty() {
 		if status == http.StatusMovedPermanently {
-			cch.SetPublic().SetSharedMaxAge(60)
-			cch.Add(header)
-
-			return
+			h.SetPublic().SetSharedMaxAge(60)
+			return h.String()
 		}
 
 		if header.Get("Expires") == "" && header.Get("ETag") == "" && header.Get("Last-Modified") == "" {
-			cch.AddDirective("no-cache")
-		}
-
-		if header.Get("Expires") != "" || header.Get("ETag") != "" || header.Get("Last-Modified") != "" {
-			cch.AddDirective("private").MustRevalidate()
+			h.NoCache()
+		} else if header.Get("Expires") != "" || header.Get("ETag") != "" || header.Get("Last-Modified") != "" {
+			h.SetPrivate().MustRevalidate()
 		}
 	}
 
-	if !cch.IsPublic() && !cch.IsPrivate() && !cch.Has("s-maxage") {
-		cch.SetPrivate()
+	if !h.public && !h.private && !h.sharedMaxAge.Valid {
+		h.SetPrivate()
 	}
-
-	cch.Add(header)
+	return h.String()
 }
 
-// parseCacheControl parses a cache-control header
-func parseCacheControl(cc string) *Headers {
+var rxCacheControlHeader = regexp.MustCompile(`([a-zA-Z][a-zA-Z_-]*)\s*(?:=(?:"([^"]*)"|([^ \t",;]*)))?`)
+
+// Parse parses a cache-control header
+func (h *Headers) Parse(cc string) {
 	if cc == "" {
-		return NewHeaders()
+		return
 	}
 
 	matches := rxCacheControlHeader.FindAllStringSubmatch(cc, -1)
-	h := NewHeaders()
 	for _, v := range matches {
-		h.AddDirectiveValue(v[1], v[3])
+		switch v[1] {
+		case "public":
+			h.SetPublic()
+		case "private":
+			h.SetPrivate()
+		case "max-age":
+			i, _ := strconv.ParseInt(v[3], 10, 64)
+			h.maxAge = nullInt64{Int64: i, Valid: true}
+		case "s-maxage":
+			i, _ := strconv.ParseInt(v[3], 10, 64)
+			h.sharedMaxAge = nullInt64{Int64: i, Valid: true}
+		case "no-cache":
+			h.noCache = true
+		case "no-store":
+			h.noStore = true
+		case "no-transform":
+			h.noTransform = true
+		case "must-revalidate":
+			h.mustRevalidate = true
+		}
 	}
-
-	return h
 }

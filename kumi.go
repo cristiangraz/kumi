@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cristiangraz/kumi/cache"
 	"github.com/facebookgo/grace/gracehttp"
 	"golang.org/x/net/context"
 )
@@ -79,6 +80,8 @@ func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ..
 // by each of the router implementations and should only be used if you are
 // integrating a route with Kumi.
 func (e *Engine) ReturnContext(c *Context) {
+	// Cache headers need to be released back into the pool.
+	cache.Release(c.CacheHeaders)
 	e.pool.Put(c)
 }
 
