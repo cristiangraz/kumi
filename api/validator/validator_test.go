@@ -13,65 +13,41 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
-// API Errors.
-const (
-	InvalidJSONError             = "invalid_json"
-	RequestBodyRequiredError     = "request_body_required"
-	RequestBodyExceededError     = "request_body_exceeded"
-	NotFoundError                = "not_found"
-	MethodNotAllowedError        = "method_not_allowed"
-	AlreadyExistsError           = "already_exists"
-	DomainAlreadyRegisteredError = "domain_already_registered"
-	InvalidContentTypeError      = "invalid_content_type"
-	RequiredError                = "required"
-	InvalidTypeError             = "invalid_type"
-	InvalidParameterError        = "invalid_parameter"
-	InvalidParametersError       = "invalid_parameters"
-	UnknownParameterError        = "unknown_parameter"
-	InvalidValueError            = "invalid_value"
-	DomainContactRequiredError   = "domain_contact_required"
-	BadRequestError              = "bad_request"
-	InternalServerError          = "server_error"
-	ServiceUnavailableError      = "service_unavailable"
+var (
+	InvalidJSONError         = api.Error{StatusCode: http.StatusBadRequest, Type: "invalid_json", Message: "Invalid or malformed JSON"}
+	RequestBodyRequiredError = api.Error{StatusCode: http.StatusBadRequest, Type: "request_body_required", Message: "Request sent with no body"}
+	RequestBodyExceededError = api.Error{StatusCode: http.StatusBadRequest, Type: "request_body_exceeded", Message: "Request body exceeded"}
+	NotFoundError            = api.Error{StatusCode: http.StatusNotFound, Type: "not_found", Message: "Not found"}
+	MethodNotAllowedError    = api.Error{StatusCode: http.StatusMethodNotAllowed, Type: "method_not_allowed", Message: "Method not allowed"}
+	AlreadyExistsError       = api.Error{StatusCode: http.StatusConflict, Type: "already_exists", Message: "Another resource has the same value as this field"}
+	InvalidContentTypeError  = api.Error{StatusCode: http.StatusUnsupportedMediaType, Type: "invalid_content_type", Message: "Invalid or missing Content-Type header"}
+	RequiredError            = api.Error{StatusCode: 422, Type: "required", Message: "Required field missing"}
+	InvalidTypeError         = api.Error{StatusCode: 422, Type: "invalid_type", Message: "Field is wrong type. See documentation for more details"}
+	InvalidParameterError    = api.Error{StatusCode: 422, Type: "invalid_parameter", Message: "Field is invalid. See documentation for more details"}
+	InvalidParametersError   = api.Error{StatusCode: 422, Type: "invalid_parameters", Message: "One or more parameters is invalid"}
+	UnknownParameterError    = api.Error{StatusCode: 422, Type: "unknown_parameter", Message: "Unknown parameter sent"}
+	InvalidValueError        = api.Error{StatusCode: 422, Type: "invalid_value", Message: "The provided value is invalid"}
+	BadRequestError          = api.Error{StatusCode: http.StatusBadRequest, Type: "bad_request", Message: "Bad request."}
+	InternalServerError      = api.Error{StatusCode: http.StatusInternalServerError, Type: "server_error", Message: "Internal server error. The error has been logged and we are working on it"}
+	ServiceUnavailableError  = api.Error{StatusCode: http.StatusServiceUnavailable, Type: "service_unavailable", Message: "Service unavailable. Please try again shortly"}
 )
-
-var errorCollection = api.ErrorCollection{
-	InvalidJSONError:             {StatusCode: http.StatusBadRequest, Type: InvalidJSONError, Message: "Invalid or malformed JSON"},
-	RequestBodyRequiredError:     {StatusCode: http.StatusBadRequest, Type: RequestBodyRequiredError, Message: "Request sent with no body"},
-	RequestBodyExceededError:     {StatusCode: http.StatusBadRequest, Type: RequestBodyExceededError, Message: "Request body exceeded"},
-	NotFoundError:                {StatusCode: http.StatusNotFound, Type: NotFoundError, Message: "Not found"},
-	MethodNotAllowedError:        {StatusCode: http.StatusMethodNotAllowed, Type: MethodNotAllowedError, Message: "Method not allowed"},
-	AlreadyExistsError:           {StatusCode: http.StatusConflict, Type: AlreadyExistsError, Message: "Another resource has the same value as this field"},
-	DomainAlreadyRegisteredError: {StatusCode: http.StatusConflict, Type: DomainAlreadyRegisteredError, Message: "One or more domains is not available for registration"},
-	InvalidContentTypeError:      {StatusCode: http.StatusUnsupportedMediaType, Type: InvalidContentTypeError, Message: "Invalid or missing Content-Type header"},
-	RequiredError:                {StatusCode: 422, Type: RequiredError, Message: "Required field missing"},
-	InvalidTypeError:             {StatusCode: 422, Type: InvalidTypeError, Message: "Field is wrong type. See documentation for more details"},
-	InvalidParameterError:        {StatusCode: 422, Type: InvalidParameterError, Message: "Field is invalid. See documentation for more details"},
-	InvalidParametersError:       {StatusCode: 422, Type: InvalidParametersError, Message: "One or more parameters is invalid"},
-	UnknownParameterError:        {StatusCode: 422, Type: UnknownParameterError, Message: "Unknown parameter sent"},
-	InvalidValueError:            {StatusCode: 422, Type: InvalidValueError, Message: "The provided value is invalid"},
-	DomainContactRequiredError:   {StatusCode: 422, Type: DomainContactRequiredError, Message: "A domain contact is required for this action"},
-	BadRequestError:              {StatusCode: http.StatusBadRequest, Type: BadRequestError, Message: "Bad request."},
-	InternalServerError:          {StatusCode: http.StatusInternalServerError, Type: InternalServerError, Message: "Internal server error. The error has been logged and we are working on it"},
-	ServiceUnavailableError:      {StatusCode: http.StatusServiceUnavailable, Type: ServiceUnavailableError, Message: "Service unavailable. Please try again shortly"},
-}
 
 var (
 	validatorOpts = &Options{
-		RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
-		RequestBodyExceeded: errorCollection.Get(RequestBodyExceededError),
-		InvalidJSON:         errorCollection.Get(InvalidJSONError),
-		BadRequest:          errorCollection.Get(BadRequestError),
+		RequestBodyRequired: RequestBodyRequiredError,
+		RequestBodyExceeded: RequestBodyExceededError,
+		InvalidJSON:         InvalidJSONError,
+		BadRequest:          BadRequestError,
 		Rules: Rules{
 			"*": []Mapping{
-				{Type: "required", ErrorType: RequiredError, Message: "Required field missing"},
-				{Type: "additional_property_not_allowed", ErrorType: UnknownParameterError, Message: "Unknown parameter sent"},
-				{Type: "enum", ErrorType: InvalidValueError, Message: "The provided value is invalid"},
-				{Type: "number_one_of", ErrorType: InvalidParametersError, Message: "One or more parameters is invalid"},
-				{Type: "number_any_of", ErrorType: InvalidParametersError, Message: "One or more parameters is invalid"},
-				{Type: "number_all_of", ErrorType: InvalidParametersError, Message: "One or more parameters is invalid"},
-				{Type: "invalid_type", ErrorType: InvalidTypeError, Message: errorCollection.Get(InvalidTypeError).Message},
-				{Type: "*", ErrorType: InvalidParameterError, Message: "Field is invalid. See documentation for more details"},
+				{Type: "required", ErrorType: RequiredError.Type, Message: "Required field missing"},
+				{Type: "additional_property_not_allowed", ErrorType: UnknownParameterError.Type, Message: "Unknown parameter sent"},
+				{Type: "enum", ErrorType: InvalidValueError.Type, Message: "The provided value is invalid"},
+				{Type: "number_one_of", ErrorType: InvalidParametersError.Type, Message: "One or more parameters is invalid"},
+				{Type: "number_any_of", ErrorType: InvalidParametersError.Type, Message: "One or more parameters is invalid"},
+				{Type: "number_all_of", ErrorType: InvalidParametersError.Type, Message: "One or more parameters is invalid"},
+				{Type: "invalid_type", ErrorType: InvalidTypeError.Type, Message: InvalidTypeError.Message},
+				{Type: "*", ErrorType: InvalidParameterError.Type, Message: "Field is invalid. See documentation for more details"},
 			},
 		},
 		Limit:       int64(1<<20) + 1, // Limit request body at 1MB
@@ -123,8 +99,8 @@ func TestValidator(t *testing.T) {
 			expect: []api.Error{
 				api.Error{
 					Field:   "city",
-					Type:    errorCollection.Get(InvalidValueError).Type,
-					Message: errorCollection.Get(InvalidValueError).Message,
+					Type:    InvalidValueError.Type,
+					Message: InvalidValueError.Message,
 				},
 			},
 		},
@@ -136,8 +112,8 @@ func TestValidator(t *testing.T) {
 			expectStatus: http.StatusBadRequest,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(RequestBodyExceededError).Type,
-					Message: errorCollection.Get(RequestBodyExceededError).Message,
+					Type:    RequestBodyExceededError.Type,
+					Message: RequestBodyExceededError.Message,
 				},
 			},
 		},
@@ -148,8 +124,8 @@ func TestValidator(t *testing.T) {
 			expectStatus: http.StatusBadRequest,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(InvalidJSONError).Type,
-					Message: errorCollection.Get(InvalidJSONError).Message,
+					Type:    InvalidJSONError.Type,
+					Message: InvalidJSONError.Message,
 				},
 			},
 		},
@@ -160,8 +136,8 @@ func TestValidator(t *testing.T) {
 			expectStatus: http.StatusBadRequest,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(RequestBodyRequiredError).Type,
-					Message: errorCollection.Get(RequestBodyRequiredError).Message,
+					Type:    RequestBodyRequiredError.Type,
+					Message: RequestBodyRequiredError.Message,
 				},
 			},
 		},
@@ -172,8 +148,8 @@ func TestValidator(t *testing.T) {
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(InvalidTypeError).Type,
-					Message: errorCollection.Get(InvalidTypeError).Message,
+					Type:    InvalidTypeError.Type,
+					Message: InvalidTypeError.Message,
 					Field:   "name",
 				},
 			},
@@ -326,13 +302,13 @@ func TestSecondaryValidator(t *testing.T) {
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(RequiredError).Type,
-					Message: errorCollection.Get(RequiredError).Message,
+					Type:    RequiredError.Type,
+					Message: RequiredError.Message,
 					Field:   "first_name",
 				},
 				api.Error{
-					Type:    errorCollection.Get(RequiredError).Type,
-					Message: errorCollection.Get(RequiredError).Message,
+					Type:    RequiredError.Type,
+					Message: RequiredError.Message,
 					Field:   "last_name",
 				},
 			},
@@ -343,8 +319,8 @@ func TestSecondaryValidator(t *testing.T) {
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(RequiredError).Type,
-					Message: errorCollection.Get(RequiredError).Message,
+					Type:    RequiredError.Type,
+					Message: RequiredError.Message,
 					Field:   "name",
 				},
 			},
@@ -355,13 +331,13 @@ func TestSecondaryValidator(t *testing.T) {
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(RequiredError).Type,
-					Message: errorCollection.Get(RequiredError).Message,
+					Type:    RequiredError.Type,
+					Message: RequiredError.Message,
 					Field:   "last_name",
 				},
 				api.Error{
-					Type:    errorCollection.Get(InvalidValueError).Type,
-					Message: errorCollection.Get(InvalidValueError).Message,
+					Type:    InvalidValueError.Type,
+					Message: InvalidValueError.Message,
 					Field:   "first_name",
 				},
 			},
@@ -372,8 +348,8 @@ func TestSecondaryValidator(t *testing.T) {
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
-					Type:    errorCollection.Get(RequiredError).Type,
-					Message: errorCollection.Get(RequiredError).Message,
+					Type:    RequiredError.Type,
+					Message: RequiredError.Message,
 					Field:   "last_name",
 				},
 			},
@@ -388,7 +364,7 @@ func TestSecondaryValidator(t *testing.T) {
 		}
 
 		if data.Type == "" {
-			return nil, errorCollection.Get(RequiredError).With(api.SendInput{
+			return nil, RequiredError.With(api.SendInput{
 				Field: "type",
 			})
 		}
@@ -402,7 +378,7 @@ func TestSecondaryValidator(t *testing.T) {
 		case "Company":
 			result, err = gojsonschema.Validate(companySchema, document)
 		default:
-			return nil, errorCollection.Get(InvalidValueError).With(api.SendInput{
+			return nil, InvalidValueError.With(api.SendInput{
 				Field: "type",
 			})
 		}

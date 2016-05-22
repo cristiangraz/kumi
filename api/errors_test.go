@@ -1,133 +1,59 @@
 package api
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 )
 
-const (
-	InvalidJSONError        = "invalid_json"
-	AccessDeniedError       = "access_denied"
-	NotFoundError           = "not_found"
-	MethodNotAllowedError   = "method_not_allowed"
-	AlreadyExistsError      = "already_exists"
-	InvalidContentTypeError = "invalid_content_type"
-)
-
-func init() {
-	Errors = ErrorCollection{
-		InvalidJSONError:        {StatusCode: http.StatusBadRequest, Type: InvalidJSONError, Message: "Invalid or malformed JSON"},
-		AccessDeniedError:       {StatusCode: http.StatusForbidden, Type: AccessDeniedError, Message: "Access denied"},
-		NotFoundError:           {StatusCode: http.StatusNotFound, Type: NotFoundError, Message: "Not found"},
-		MethodNotAllowedError:   {StatusCode: http.StatusMethodNotAllowed, Type: MethodNotAllowedError, Message: "Method not allowed"},
-		AlreadyExistsError:      {StatusCode: http.StatusConflict, Type: AlreadyExistsError, Message: "Another resource has the same value as this field"},
-		InvalidContentTypeError: {StatusCode: http.StatusUnsupportedMediaType, Type: InvalidContentTypeError, Message: "Invalid or missing content-type header"},
-	}
-}
-
 func TestErrors(t *testing.T) {
-	tests := []struct {
-		in   string
-		want Error
-	}{
-		{in: "invalid_json", want: Error{StatusCode: http.StatusBadRequest, Type: InvalidJSONError, Message: "Invalid or malformed JSON"}},
-		{in: "access_denied", want: Error{StatusCode: http.StatusForbidden, Type: AccessDeniedError, Message: "Access denied"}},
-		{in: "not_found", want: Error{StatusCode: http.StatusNotFound, Type: NotFoundError, Message: "Not found"}},
-		{in: "method_not_allowed", want: Error{StatusCode: http.StatusMethodNotAllowed, Type: MethodNotAllowedError, Message: "Method not allowed"}},
-		{in: "already_exists", want: Error{StatusCode: http.StatusConflict, Type: AlreadyExistsError, Message: "Another resource has the same value as this field"}},
-		{in: "invalid_content_type", want: Error{StatusCode: http.StatusUnsupportedMediaType, Type: InvalidContentTypeError, Message: "Invalid or missing content-type header"}},
-	}
-
-	// Set Formatter
 	Formatter = formatJSON
 
-	fieldName := "field_name"
-	msg := "bla bla bla"
-	for i, tt := range tests {
-		given := GetError(tt.in)
-		if !reflect.DeepEqual(tt.want, given) {
-			t.Errorf("TestGet (%d): Want %+v, given %+v", i, tt.want, given)
-		}
+	e := Error{StatusCode: http.StatusBadRequest, Type: "invalid_json", Message: "Invalid or malformed JSON"}
 
-		rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
-		given.Send(rec)
-		Failure(tt.want.StatusCode, tt.want).Send(expected)
+	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
+	e.Send(rec)
+	Failure(e.StatusCode, e).SendFormat(expected, formatJSON)
 
-		if rec.Header().Get("Content-Type") != "application/json" {
-			t.Errorf("TestErrors (%d): Wrong Content-Type. Want %q, given %q", i, "application/json", rec.Header().Get("Content-Type"))
-		}
-
-		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
-		}
-
-		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-		given.SendWith(SendInput{Field: fieldName}, rec)
-		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Field: fieldName, Message: tt.want.Message}).Send(expected)
-
-		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body for SendWith using field. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
-		}
-
-		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-		given.SendWith(SendInput{Message: msg}, rec)
-		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Message: msg}).Send(expected)
-
-		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body for SendWith using message. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
-		}
-	}
-}
-
-func TestErrorsFormat(t *testing.T) {
-	tests := []struct {
-		in   string
-		want Error
-	}{
-		{in: "invalid_json", want: Error{StatusCode: http.StatusBadRequest, Type: InvalidJSONError, Message: "Invalid or malformed JSON"}},
-		{in: "access_denied", want: Error{StatusCode: http.StatusForbidden, Type: AccessDeniedError, Message: "Access denied"}},
-		{in: "not_found", want: Error{StatusCode: http.StatusNotFound, Type: NotFoundError, Message: "Not found"}},
-		{in: "method_not_allowed", want: Error{StatusCode: http.StatusMethodNotAllowed, Type: MethodNotAllowedError, Message: "Method not allowed"}},
-		{in: "already_exists", want: Error{StatusCode: http.StatusConflict, Type: AlreadyExistsError, Message: "Another resource has the same value as this field"}},
-		{in: "invalid_content_type", want: Error{StatusCode: http.StatusUnsupportedMediaType, Type: InvalidContentTypeError, Message: "Invalid or missing content-type header"}},
+	if rec.Body.String() != expected.Body.String() {
+		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
+	} else if rec.Code != e.StatusCode {
+		t.Fatalf("unexpected status code: %d", rec.Code)
 	}
 
-	fieldName := "field_name"
-	msg := "bla bla bla"
-	for i, tt := range tests {
-		given := GetError(tt.in)
-		if !reflect.DeepEqual(tt.want, given) {
-			t.Errorf("TestGet (%d): Want %+v, given %+v", i, tt.want, given)
-		}
+	// Set fields
+	e2 := e
+	e2.Field = "field_name"
 
-		rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
-		given.SendFormat(rec, formatJSON)
-		Failure(tt.want.StatusCode, tt.want).SendFormat(expected, formatJSON)
+	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
+	e2.SendWith(SendInput{Field: "field_name"}, rec)
 
-		if rec.Header().Get("Content-Type") != "application/json" {
-			t.Errorf("TestErrors (%d): Wrong Content-Type. Want %q, given %q", i, "application/json", rec.Header().Get("Content-Type"))
-		}
+	Failure(e.StatusCode, e2).Send(expected)
+	if !bytes.Equal(rec.Body.Bytes(), expected.Body.Bytes()) {
+		t.Fatalf("unexpected response: %s", rec.Body.Bytes())
+	}
 
-		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
-		}
+	Formatter = nil
 
-		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-		given.With(SendInput{Field: fieldName}).SendFormat(rec, formatJSON)
-		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Field: fieldName, Message: tt.want.Message}).SendFormat(expected, formatJSON)
+	// Send Format
+	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
+	e.SendFormat(rec, formatJSON)
+	Failure(e.StatusCode, e).SendFormat(expected, formatJSON)
 
-		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body for SendWithFormat using field. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
-		}
+	if rec.Body.String() != expected.Body.String() {
+		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
+	} else if rec.Code != e.StatusCode {
+		t.Fatalf("unexpected status code: %d", rec.Code)
+	}
 
-		rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-		given.With(SendInput{Message: "bla bla bla"}).SendFormat(rec, formatJSON)
-		Failure(tt.want.StatusCode, Error{Type: tt.want.Type, Message: msg}).SendFormat(expected, formatJSON)
+	e2 = e
+	e2.Field = "field_name"
 
-		if !reflect.DeepEqual(rec, expected) {
-			t.Errorf("TestErrors (%d): Wrong response body for SendWithFormat using message. Want %s, given %s", i, rec.Body.Bytes(), expected.Body.Bytes())
-		}
+	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
+	e2.SendFormat(rec, formatXML)
+	Failure(e.StatusCode, e2).SendFormat(expected, formatXML)
+	if !bytes.Equal(rec.Body.Bytes(), expected.Body.Bytes()) {
+		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
 	}
 }

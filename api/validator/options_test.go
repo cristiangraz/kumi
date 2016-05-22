@@ -13,40 +13,40 @@ func TestValidatorOptionsValid(t *testing.T) {
 		},
 		{
 			options: &Options{
-				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
+				RequestBodyRequired: RequestBodyRequiredError,
 			},
 			expect: errOptionsRequestBodyExceededHandlerRequired,
 		},
 		{
 			options: &Options{
-				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
-				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
+				RequestBodyRequired: RequestBodyRequiredError,
+				RequestBodyExceeded: RequestBodyRequiredError,
 			},
 			expect: errOptionsInvalidJSONHandlerRequired,
 		},
 		{
 			options: &Options{
-				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
-				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
-				InvalidJSON:         errorCollection.Get(InvalidJSONError),
+				RequestBodyRequired: RequestBodyRequiredError,
+				RequestBodyExceeded: RequestBodyRequiredError,
+				InvalidJSON:         InvalidJSONError,
 			},
 			expect: errOptionsBadRequestHandlerRequired,
 		},
 		{
 			options: &Options{
-				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
-				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
-				InvalidJSON:         errorCollection.Get(InvalidJSONError),
-				BadRequest:          errorCollection.Get(BadRequestError),
+				RequestBodyRequired: RequestBodyRequiredError,
+				RequestBodyExceeded: RequestBodyRequiredError,
+				InvalidJSON:         InvalidJSONError,
+				BadRequest:          BadRequestError,
 			},
 			expect: errOptionsRulesRequired,
 		},
 		{
 			options: &Options{
-				RequestBodyRequired: errorCollection.Get(RequestBodyRequiredError),
-				RequestBodyExceeded: errorCollection.Get(RequestBodyRequiredError),
-				InvalidJSON:         errorCollection.Get(InvalidJSONError),
-				BadRequest:          errorCollection.Get(BadRequestError),
+				RequestBodyRequired: RequestBodyRequiredError,
+				RequestBodyExceeded: RequestBodyRequiredError,
+				InvalidJSON:         InvalidJSONError,
+				BadRequest:          BadRequestError,
 				Rules:               Rules{"*": []Mapping{}},
 			},
 			expect: nil,

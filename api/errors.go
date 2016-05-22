@@ -31,19 +31,6 @@ type SendInput struct {
 	Message string
 }
 
-// ErrorCollection maps strings to Errors. This is a
-// good place to put standardized API error definitions.
-type ErrorCollection map[string]Error
-
-// Errors holds a collection of standardized API error definitions for easy
-// error responses.
-var Errors ErrorCollection
-
-// GetError is a convenience method to access the ErrorCollection.
-func GetError(errType string) Error {
-	return Errors.Get(errType)
-}
-
 // Error implements the error interface.
 func (e Error) Error() string {
 	if e.Field == "" {
@@ -51,16 +38,6 @@ func (e Error) Error() string {
 	}
 
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
-}
-
-// Get returns the StatusError from the ErrorCollection.
-// If none is found an empty StatusError is returned.
-func (c ErrorCollection) Get(errType string) Error {
-	if se, ok := c[errType]; ok {
-		return se
-	}
-
-	return Error{}
 }
 
 // Send sends the Error with no field.
@@ -80,29 +57,28 @@ func (e Error) SendFormat(w http.ResponseWriter, f FormatterFn) {
 		statusCode = http.StatusBadRequest
 	}
 
-	Failure(statusCode, Error{Type: e.Type, Message: e.Message}).SendFormat(w, f)
+	Failure(statusCode, Error{Field: e.Field, Type: e.Type, Message: e.Message}).SendFormat(w, f)
 }
 
 // With returns an api.Sender with the given fields.
 func (e Error) With(input SendInput) *ErrorResponse {
-	se := e
 	if input.Field != "" {
-		se.Field = input.Field
+		e.Field = input.Field
 	}
 
 	if input.Message != "" {
-		se.Message = input.Message
+		e.Message = input.Message
 	}
 
-	statusCode := se.StatusCode
+	statusCode := e.StatusCode
 	if statusCode == 0 {
 		statusCode = http.StatusBadRequest
 	}
 
 	return Failure(statusCode, Error{
-		Field:   se.Field,
-		Type:    se.Type,
-		Message: se.Message,
+		Field:   e.Field,
+		Type:    e.Type,
+		Message: e.Message,
 	})
 }
 
