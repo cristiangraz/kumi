@@ -2,52 +2,10 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
-	"encoding/xml"
-	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 )
-
-// formatJSON formats an API response and writes it as JSON.
-func formatJSON(r *Response, w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(r.Status)
-
-	// hide status code for successful responses
-	if r.Success {
-		r.Status = 0
-	}
-
-	return json.NewEncoder(w).Encode(r)
-}
-
-// formatXML formats an API response and writes it as XML.
-func formatXML(r *Response, w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(r.Status)
-
-	// hide status code for successful responses
-	if r.Success {
-		r.Status = 0
-	}
-
-	if r.Success || len(r.Errors) == 0 {
-		return xml.NewEncoder(w).Encode(r)
-	}
-
-	type alias Response
-	a := struct {
-		*alias
-		Errors []Error `json:"errors,omitempty" xml:"errors>error,omitempty"`
-	}{
-		Errors: r.Errors,
-		alias:  (*alias)(r),
-	}
-
-	return xml.NewEncoder(w).Encode(a)
-}
 
 func TestResponse(t *testing.T) {
 	result := struct {
@@ -68,15 +26,15 @@ func TestResponse(t *testing.T) {
 		want       []byte
 	}{
 		{
-			formatter: formatJSON,
+			formatter: JSON,
 			want:      []byte(`{"success":true,"result":{"first_name":"Jon","last_name":"Doe","age":30}}`),
 		},
 		{
-			formatter: formatXML,
+			formatter: XML,
 			want:      []byte(`<response><success>true</success><result><first_name>Jon</first_name><last_name>Doe</last_name><age>30</age></result></response>`),
 		},
 		{
-			formatter:  formatJSON,
+			formatter:  JSON,
 			statusCode: 409,
 			errors: []Error{
 				Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
@@ -84,7 +42,7 @@ func TestResponse(t *testing.T) {
 			want: []byte(`{"success":false,"status":409,"code":"conflict","errors":[{"field":"email","type":"already_exists","message":"A user with that email address already exists"}]}`),
 		},
 		{
-			formatter:  formatXML,
+			formatter:  XML,
 			statusCode: 409,
 			errors: []Error{
 				Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
@@ -92,27 +50,27 @@ func TestResponse(t *testing.T) {
 			want: []byte(`<response><success>false</success><status>409</status><code>conflict</code><errors><error field="email" type="already_exists">A user with that email address already exists</error></errors></response>`),
 		},
 		{
-			formatter: formatJSON,
+			formatter: JSON,
 			paging:    Paging{Count: 1, Offset: 0, Limit: 20},
 			want:      []byte(`{"success":true,"result":{"first_name":"Jon","last_name":"Doe","age":30},"paging":{"total_count":1,"limit":20,"offset":0}}`),
 		},
 		{
-			formatter: formatJSON,
+			formatter: JSON,
 			paging:    Paging{Count: 1, Offset: 0, Limit: 20, Order: &PagingOrder{Field: "id", Direction: "asc"}},
 			want:      []byte(`{"success":true,"result":{"first_name":"Jon","last_name":"Doe","age":30},"paging":{"total_count":1,"limit":20,"offset":0,"order":{"field":"id","direction":"asc"}}}`),
 		},
 		{
-			formatter: formatXML,
+			formatter: XML,
 			paging:    Paging{Count: 1, Offset: 0, Limit: 20},
 			want:      []byte(`<response><success>true</success><result><first_name>Jon</first_name><last_name>Doe</last_name><age>30</age></result><paging><total_count>1</total_count><limit>20</limit><offset>0</offset></paging></response>`),
 		},
 		{
-			formatter: formatXML,
+			formatter: XML,
 			paging:    Paging{Count: 1, Offset: 0, Limit: 20, Order: &PagingOrder{Field: "id", Direction: "asc"}},
 			want:      []byte(`<response><success>true</success><result><first_name>Jon</first_name><last_name>Doe</last_name><age>30</age></result><paging><total_count>1</total_count><limit>20</limit><offset>0</offset><order><field>id</field><direction>asc</direction></order></paging></response>`),
 		},
 		{
-			formatter:  formatJSON,
+			formatter:  JSON,
 			statusCode: 422,
 			errors: []Error{
 				Error{Field: "email", Type: "required", Message: "Required field missing"},

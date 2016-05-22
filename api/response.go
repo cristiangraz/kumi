@@ -58,14 +58,6 @@ type PagingOrder struct {
 	Direction string   `json:"direction,omitempty" xml:"direction"`
 }
 
-// FormatterFn is used to format responses.
-type FormatterFn func(r *Response, w http.ResponseWriter) error
-
-// Formatter holds the ResponseFormatter to use.
-// You must set a Formatter once before calling Send.
-// Otherwise use SendFormat.
-var Formatter FormatterFn
-
 // Compile-time checks
 var _ Sender = &Response{}
 var _ Sender = &ErrorResponse{}

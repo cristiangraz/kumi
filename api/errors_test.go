@@ -8,13 +8,13 @@ import (
 )
 
 func TestErrors(t *testing.T) {
-	Formatter = formatJSON
+	Formatter = JSON
 
 	e := Error{StatusCode: http.StatusBadRequest, Type: "invalid_json", Message: "Invalid or malformed JSON"}
 
 	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
 	e.Send(rec)
-	Failure(e.StatusCode, e).SendFormat(expected, formatJSON)
+	Failure(e.StatusCode, e).SendFormat(expected, JSON)
 
 	if rec.Body.String() != expected.Body.String() {
 		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
@@ -38,8 +38,8 @@ func TestErrors(t *testing.T) {
 
 	// Send Format
 	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-	e.SendFormat(rec, formatJSON)
-	Failure(e.StatusCode, e).SendFormat(expected, formatJSON)
+	e.SendFormat(rec, JSON)
+	Failure(e.StatusCode, e).SendFormat(expected, JSON)
 
 	if rec.Body.String() != expected.Body.String() {
 		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
@@ -51,8 +51,8 @@ func TestErrors(t *testing.T) {
 	e2.Field = "field_name"
 
 	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-	e2.SendFormat(rec, formatXML)
-	Failure(e.StatusCode, e2).SendFormat(expected, formatXML)
+	e2.SendFormat(rec, XML)
+	Failure(e.StatusCode, e2).SendFormat(expected, XML)
 	if !bytes.Equal(rec.Body.Bytes(), expected.Body.Bytes()) {
 		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
 	}

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/cristiangraz/kumi/api"
-	"github.com/cristiangraz/kumi/api/formatter"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -54,10 +53,6 @@ var (
 		ErrorStatus: 422,
 	}
 )
-
-func init() {
-	api.Formatter = formatter.JSON
-}
 
 func TestValidator(t *testing.T) {
 	schema := `{

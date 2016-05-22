@@ -1,12 +1,10 @@
-package formatter
+package api
 
 import (
 	"bytes"
 	"net/http/httptest"
 	"reflect"
 	"testing"
-
-	"github.com/cristiangraz/kumi/api"
 )
 
 func TestFormatters(t *testing.T) {
@@ -21,11 +19,11 @@ func TestFormatters(t *testing.T) {
 	}
 
 	tests := []struct {
-		formatter   api.FormatterFn
+		formatter   FormatterFn
 		statusCode  int
 		contentType string
-		paging      api.Paging
-		errors      []api.Error
+		paging      Paging
+		errors      []Error
 		want        []byte
 	}{
 		{
@@ -42,8 +40,8 @@ func TestFormatters(t *testing.T) {
 			formatter:   JSON,
 			contentType: "application/json",
 			statusCode:  409,
-			errors: []api.Error{
-				api.Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
+			errors: []Error{
+				Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
 			},
 			want: []byte(`{"success":false,"status":409,"code":"conflict","errors":[{"field":"email","type":"already_exists","message":"A user with that email address already exists"}]}`),
 		},
@@ -51,65 +49,47 @@ func TestFormatters(t *testing.T) {
 			formatter:   XML,
 			contentType: "application/xml",
 			statusCode:  409,
-			errors: []api.Error{
-				api.Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
+			errors: []Error{
+				Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
 			},
 			want: []byte(`<response><success>false</success><status>409</status><code>conflict</code><errors><error field="email" type="already_exists">A user with that email address already exists</error></errors></response>`),
 		},
 		{
 			formatter:   JSON,
 			contentType: "application/json",
-			paging:      api.Paging{Count: 1, Offset: 0, Limit: 20},
+			paging:      Paging{Count: 1, Offset: 0, Limit: 20},
 			want:        []byte(`{"success":true,"result":{"first_name":"Jon","last_name":"Doe","age":30},"paging":{"total_count":1,"limit":20,"offset":0}}`),
 		},
 		{
 			formatter:   XML,
 			contentType: "application/xml",
-			paging:      api.Paging{Count: 1, Offset: 0, Limit: 20},
+			paging:      Paging{Count: 1, Offset: 0, Limit: 20},
 			want:        []byte(`<response><success>true</success><result><first_name>Jon</first_name><last_name>Doe</last_name><age>30</age></result><paging><total_count>1</total_count><limit>20</limit><offset>0</offset></paging></response>`),
 		},
 		{
 			formatter:   JSON,
 			contentType: "application/json",
 			statusCode:  422,
-			errors: []api.Error{
-				api.Error{Field: "email", Type: "required", Message: "Required field missing"},
+			errors: []Error{
+				Error{Field: "email", Type: "required", Message: "Required field missing"},
 			},
 			want: []byte(`{"success":false,"status":422,"code":"unprocessable_entity","errors":[{"field":"email","type":"required","message":"Required field missing"}]}`),
-		},
-		{
-			formatter:   JSONContext,
-			contentType: "application/json",
-			statusCode:  422,
-			errors: []api.Error{
-				api.Error{Field: "email", Type: "required", Message: "Required field missing"},
-			},
-			want: []byte(`{"success":false,"status":422,"code":"unprocessable_entity","context_info":{"errors":[{"field":"email","type":"required","message":"Required field missing"}]}}`),
-		},
-		{
-			formatter:   XMLContext,
-			contentType: "application/xml",
-			statusCode:  409,
-			errors: []api.Error{
-				api.Error{Field: "email", Type: "already_exists", Message: "A user with that email address already exists"},
-			},
-			want: []byte(`<response><success>false</success><status>409</status><code>conflict</code><context_info><errors><error field="email" type="already_exists">A user with that email address already exists</error></errors></context_info></response>`),
 		},
 	}
 
 	for i, tt := range tests {
-		api.Formatter = tt.formatter
+		Formatter = tt.formatter
 		given := httptest.NewRecorder()
 
 		if len(tt.errors) == 0 {
-			response := api.Success(result)
+			response := Success(result)
 			if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
 				response = response.Paging(tt.paging)
 			}
 
 			response.Send(given)
 		} else {
-			api.Failure(tt.statusCode, tt.errors...).Send(given)
+			Failure(tt.statusCode, tt.errors...).Send(given)
 		}
 
 		if !reflect.DeepEqual(tt.want, bytes.TrimSpace(given.Body.Bytes())) {
@@ -130,14 +110,14 @@ func TestFormatters(t *testing.T) {
 		given := httptest.NewRecorder()
 
 		if len(tt.errors) == 0 {
-			response := api.Success(result)
+			response := Success(result)
 			if tt.paging.Count > 0 || tt.paging.Limit > 0 || tt.paging.Offset > 0 {
 				response = response.Paging(tt.paging)
 			}
 
 			response.SendFormat(given, tt.formatter)
 		} else {
-			api.Failure(tt.statusCode, tt.errors...).SendFormat(given, tt.formatter)
+			Failure(tt.statusCode, tt.errors...).SendFormat(given, tt.formatter)
 		}
 
 		if !reflect.DeepEqual(tt.want, bytes.TrimSpace(given.Body.Bytes())) {
