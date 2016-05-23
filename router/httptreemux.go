@@ -34,9 +34,8 @@ func NewHTTPTreeMux() *HTTPTreeMux {
 // Handle ...
 func (router *HTTPTreeMux) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
 	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, p map[string]string) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		if len(p) > 0 {
 			c.Params = kumi.Params(p)
@@ -66,9 +65,8 @@ func (router *HTTPTreeMux) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 // NotFoundHandler ...
 func (router *HTTPTreeMux) NotFoundHandler(h ...kumi.HandlerFunc) {
 	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		c.Next()
 	})
@@ -77,9 +75,8 @@ func (router *HTTPTreeMux) NotFoundHandler(h ...kumi.HandlerFunc) {
 // MethodNotAllowedHandler ...
 func (router *HTTPTreeMux) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
 	router.Router.MethodNotAllowedHandler = func(rw http.ResponseWriter, r *http.Request, methods map[string]httptreemux.HandlerFunc) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		var allow []string
 		for m := range methods {

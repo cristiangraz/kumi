@@ -27,9 +27,8 @@ func NewHTTPRouter() *HTTPRouter {
 // Handle ...
 func (router *HTTPRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
 	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		if len(params) > 0 {
 			p := make(map[string]string, len(params))
@@ -62,9 +61,8 @@ func (router *HTTPRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 // NotFoundHandler ...
 func (router *HTTPRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 	router.Router.NotFound = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		c.Next()
 	})
@@ -73,9 +71,8 @@ func (router *HTTPRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 // MethodNotAllowedHandler ...
 func (router *HTTPRouter) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
 	router.Router.MethodNotAllowed = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		methods := router.getMethods(r)
 		c.Header().Set("Allow", strings.Join(methods, ", "))

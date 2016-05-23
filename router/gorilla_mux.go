@@ -35,9 +35,8 @@ func NewGorillaMuxRouter() *GorillaMuxRouter {
 // Handle ...
 func (router *GorillaMuxRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
 	router.Router.HandleFunc(pattern, func(rw http.ResponseWriter, r *http.Request) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		if p := mux.Vars(r); len(p) > 0 {
 			c.Params = kumi.Params(p)
@@ -68,9 +67,8 @@ func (router *GorillaMuxRouter) ServeHTTP(rw http.ResponseWriter, r *http.Reques
 func (router *GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 	router.notFound = h
 	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		e := router.Engine()
-		c := e.NewContext(rw, r, h...)
-		defer e.ReturnContext(c)
+		c := router.engine.NewContext(rw, r, h...)
+		defer router.engine.ReturnContext(c)
 
 		c.Next()
 	})
@@ -84,27 +82,26 @@ func (router *GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 func (router *GorillaMuxRouter) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
 	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		methods := router.getMethods(r)
-		e := router.Engine()
 		var c *kumi.Context
 		if len(methods) > 0 {
 			// At least one match against an HTTP method. 405 Not Allowed
-			c = e.NewContext(rw, r, h...)
+			c = router.engine.NewContext(rw, r, h...)
 
 			c.Header().Set("Allow", strings.Join(methods, ", "))
 		} else {
 			// 404
 			if len(router.notFound) > 0 {
 				// 404 handler is defined by user
-				c = e.NewContext(rw, r, router.notFound...)
+				c = router.engine.NewContext(rw, r, router.notFound...)
 			} else {
 				// Fallback 404
-				c = e.NewContext(rw, r, func(c *kumi.Context) {
+				c = router.engine.NewContext(rw, r, func(c *kumi.Context) {
 					http.NotFoundHandler().ServeHTTP(c, c.Request)
 				})
 			}
 		}
 
-		defer e.ReturnContext(c)
+		defer router.engine.ReturnContext(c)
 
 		c.Next()
 	})
