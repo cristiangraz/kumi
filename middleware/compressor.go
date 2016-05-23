@@ -79,15 +79,11 @@ func CompressorLevel(level int) kumi.HandlerFunc {
 
 	return func(c *kumi.Context) {
 		// check client's accepted encodings
-		encs := acceptedEncodings(c.Request)
-		if len(encs) == 0 {
+		if encs := acceptedEncodings(c.Request); len(encs) == 0 {
 			c.WriteHeader(http.StatusNotAcceptable)
 			return
-		}
-
-		if encs[0] != encGzip {
+		} else if encs[0] != encGzip {
 			c.Next()
-
 			return
 		}
 
@@ -99,8 +95,10 @@ func CompressorLevel(level int) kumi.HandlerFunc {
 
 		// If there is a file extension and it doesn't match compressible
 		// extensions, skip
-		exts := rxExtension.FindStringSubmatch(c.Request.URL.Path)
-		if len(exts) == 1 {
+		if exts := rxExtension.FindStringSubmatch(c.Request.URL.Path); len(exts) == 0 {
+			c.Next()
+			return
+		} else if len(exts) == 1 {
 			ext := exts[0]
 			if _, ok := CompressibleExtensions[ext]; !ok {
 				c.Next()
@@ -149,15 +147,11 @@ func Decompress(r io.Reader, w io.Writer) {
 
 // AcceptsEncoding ...
 func AcceptsEncoding(r *http.Request) bool {
-	encs := acceptedEncodings(r)
-	if len(encs) == 0 {
+	if encs := acceptedEncodings(r); len(encs) == 0 {
+		return false
+	} else if encs[0] != encGzip {
 		return false
 	}
-
-	if encs[0] != encGzip {
-		return false
-	}
-
 	return true
 }
 

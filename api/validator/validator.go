@@ -39,16 +39,11 @@ var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into 
 func New(schema gojsonschema.JSONLoader, options *Options, limit int64) *Validator {
 	if options == nil {
 		log.Fatal("NewValidator: Options cannot be nil")
-	}
-
-	if err := options.Valid(); err != nil {
+	} else if err := options.Valid(); err != nil {
 		log.Fatalf("NewValidation. Invalid Options: %s", err)
-	}
-
-	if options.Swapper == nil {
+	} else if options.Swapper == nil {
 		options.Swapper = Swap
 	}
-
 	return &Validator{
 		Schema:  schema,
 		Options: options,
