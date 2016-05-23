@@ -191,7 +191,7 @@ func (h *Headers) String() string {
 			h.b = append(h.b, separate...)
 		}
 		h.b = appendByteSlices(h.b, maxAge, equalSign)
-		h.b = append(h.b, strconv.FormatInt(h.maxAge.Int64, 10)...)
+		h.b = strconv.AppendInt(h.b, h.maxAge.Int64, 10)
 	}
 	if h.mustRevalidate {
 		if len(h.b) > 0 {
@@ -240,7 +240,7 @@ func (h *Headers) String() string {
 			h.b = append(h.b, separate...)
 		}
 		h.b = appendByteSlices(h.b, sharedMaxAge, equalSign)
-		h.b = append(h.b, strconv.FormatInt(h.sharedMaxAge.Int64, 10)...)
+		h.b = strconv.AppendInt(h.b, h.sharedMaxAge.Int64, 10)
 	}
 
 	if len(h.b) == 0 {
