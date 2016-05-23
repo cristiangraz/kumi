@@ -37,7 +37,6 @@ type BodylessResponseWriter struct {
 // New creates a new Engine using the given Router.
 func New(r Router) *Engine {
 	e := &Engine{
-		RouterGroup:    RouterGroup{},
 		DefaultContext: context.Background(),
 		pool: sync.Pool{
 			New: func() interface{} {

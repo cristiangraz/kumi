@@ -33,7 +33,6 @@ func (q Query) GetDefault(name string, defaultValue string) string {
 	if v := q.Get(name); v != "" {
 		return v
 	}
-
 	return defaultValue
 }
 
@@ -45,40 +44,39 @@ func (q Query) GetInt(name string) (int, error) {
 // GetIntSlice returns a slice of ints from a comma-separated list
 // of values.
 func (q Query) GetIntSlice(name string) ([]int, error) {
-	if q.Get(name) == "" {
-		return nil, errors.New("Not found")
+	raw := q.Get(name)
+	if raw == "" {
+		return nil, errors.New("not found")
 	}
 
-	rawIDs := q.Get(name)
-	if !csvIDs.MatchString(rawIDs) {
-		return nil, errors.New("Invalid csv")
+	if !csvIDs.MatchString(raw) {
+		return nil, errors.New("invalid csv")
 	}
 
-	var slice []int
-	for _, id := range strings.Split(rawIDs, ",") {
-		i, _ := strconv.Atoi(id)
-		slice = append(slice, i)
+	split := strings.Split(raw, ",")
+	slice := make([]int, len(split))
+	for i := range split {
+		n, _ := strconv.Atoi(split[i])
+		slice[i] = n
 	}
-
 	return slice, nil
 }
 
 // GetSlice returns a slice of strings from a comma-separated list
 // of values.
 func (q Query) GetSlice(name string) ([]string, error) {
-	if q.Get(name) == "" {
-		return nil, errors.New("Not found")
+	raw := q.Get(name)
+	if raw == "" {
+		return nil, errors.New("not found")
+	} else if strings.Contains(raw, " ") {
+		return nil, errors.New("invalid csv")
 	}
 
-	if strings.Contains(q.Get("name"), " ") {
-		return nil, errors.New("Invalid csv")
+	split := strings.Split(raw, ",")
+	slice := make([]string, len(split))
+	for i := range split {
+		slice[i] = split[i]
 	}
-
-	var slice []string
-	for _, str := range strings.Split(q.Get(name), ",") {
-		slice = append(slice, str)
-	}
-
 	return slice, nil
 }
 
@@ -105,6 +103,5 @@ func (q *Query) Sort() url.Values {
 	for _, k := range keys {
 		sorted.Add(k, m[k])
 	}
-
 	return sorted
 }

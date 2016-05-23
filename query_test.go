@@ -164,9 +164,7 @@ func TestGetSlice(t *testing.T) {
 		given, err := q.GetSlice("names")
 		if tt.valid && err != nil {
 			t.Errorf("TestGetSlice (%d): Expected valid response. Error: %s", i, err)
-		}
-
-		if tt.valid && !reflect.DeepEqual(given, tt.expect) {
+		} else if tt.valid && !reflect.DeepEqual(given, tt.expect) {
 			t.Errorf("TestGetSlice (%d): Expect %v, given %v", i, tt.expect, given)
 		}
 	}
