@@ -159,7 +159,7 @@ func (h *Headers) MustRevalidate() *Headers {
 
 // ProxyRevalidate adds the proxy-revalidate directive.
 func (h *Headers) ProxyRevalidate() *Headers {
-	h.mustRevalidate = true
+	h.proxyRevalidate = true
 	return h
 }
 
