@@ -4,21 +4,21 @@ import (
 	"os"
 	"time"
 
-	apex "github.com/apex/log"
+	"github.com/apex/log"
 	"github.com/apex/log/handlers/text"
 	"github.com/cristiangraz/kumi"
 )
 
-var logger = &apex.Logger{
+var logger = &log.Logger{
 	Handler: text.New(os.Stderr),
-	Level:   apex.InfoLevel,
+	Level:   log.InfoLevel,
 }
 
 // Logger registers the logger.
 func Logger(c *kumi.Context) {
 	start := time.Now()
 	defer func() {
-		entry := apex.NewEntry(logger).WithFields(apex.Fields{
+		entry := log.NewEntry(logger).WithFields(log.Fields{
 			"path":     c.Request.URL.Path,
 			"method":   c.Request.Method,
 			"status":   c.Status(),
@@ -26,7 +26,7 @@ func Logger(c *kumi.Context) {
 		})
 
 		if err := kumi.Exception(c); err != nil {
-			entry.Errorf("Recovered from panic: %v", err)
+			entry.Errorf("recovered from panic: %v", err)
 			return
 		}
 
