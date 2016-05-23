@@ -38,9 +38,9 @@ var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into 
 // the limit set in the Validator.
 func New(schema gojsonschema.JSONLoader, options *Options, limit int64) *Validator {
 	if options == nil {
-		log.Fatal("NewValidator: Options cannot be nil")
+		log.Fatal("validator: options cannot be nil")
 	} else if err := options.Valid(); err != nil {
-		log.Fatalf("NewValidation. Invalid Options: %s", err)
+		log.Fatalf("validator: invalid options: %s", err)
 	} else if options.Swapper == nil {
 		options.Swapper = Swap
 	}

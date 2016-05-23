@@ -62,13 +62,13 @@ func (e *Engine) SetGlobalCors(cors *CorsOptions) {
 func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 	if ac == nil {
 		if e.cors == nil {
-			log.Fatal("Cannot use CorsHandler without CorsOptions settings")
+			log.Fatal("cannot use CorsHandler without CorsOptions settings")
 		}
 
 		ac = e.cors
 	} else if e.cors != nil {
 		if err := mergo.Merge(ac, e.cors); err != nil {
-			log.Fatalf("Error merging CorsOptions. Error: %s", err)
+			log.Fatalf("error merging CorsOptions. Error: %s", err)
 		}
 	}
 

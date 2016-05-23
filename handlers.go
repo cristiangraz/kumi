@@ -39,7 +39,7 @@ func wrapHandler(handler Handler) (HandlerFunc, error) {
 			h(c).ServeHTTP(c, c.Request)
 		}, nil
 	default:
-		return nil, fmt.Errorf("Expected http.HandlerFunc, http.Handler, or kumi.HandlerFunc. Given %T", h)
+		return nil, fmt.Errorf("expected http.HandlerFunc, http.Handler, or kumi.HandlerFunc. Given %T", h)
 	}
 }
 
