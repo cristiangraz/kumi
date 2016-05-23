@@ -347,3 +347,24 @@ func TestCorsPreflight(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkCors(b *testing.B) {
+	e := New(&testRouter{})
+	e.SetGlobalCors(&CorsOptions{
+		AllowOrigin: []string{"*"},
+	})
+
+	cors := e.Cors(GET, POST, PUT, OPTIONS, PATCH)
+	rw := httptest.NewRecorder()
+	r, _ := http.NewRequest("OPTIONS", "/", nil)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		c := e.NewContext(rw, r, cors)
+
+		c.Next()
+		e.ReturnContext(c)
+	}
+}

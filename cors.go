@@ -97,10 +97,12 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 		allowMethods = append(allowMethods, OPTIONS)
 	}
 
+	allowMethodsStr := strings.Join(allowMethods, ", ")
+
 	return func(c *Context) {
 		if c.Request.Method == OPTIONS {
 			// All OPTIONS requests should set the Allow header.
-			c.Header().Set("Allow", strings.Join(allowMethods, ", "))
+			c.Header().Set("Allow", allowMethodsStr)
 		}
 
 		reqOrigin := c.Request.Header.Get(corsOrigin)
@@ -115,7 +117,7 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 			return
 		}
 
-		allow := false
+		var allow bool
 		for _, ao := range ac.AllowOrigin {
 			if ao == "*" {
 				c.Header().Set(corsAllowOrigin, "*")
@@ -154,7 +156,7 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 
 		// For OPTIONS requests, don't continue to next middleware
 		if c.Request.Method == OPTIONS {
-			c.Header().Set(corsAllowMethods, strings.Join(allowMethods, ", "))
+			c.Header().Set(corsAllowMethods, allowMethodsStr)
 			c.WriteHeader(http.StatusNoContent)
 			return
 		}
