@@ -46,7 +46,7 @@ func TestCors(t *testing.T) {
 			method:     "GET",
 			headers: map[string]string{
 				"Vary": "",
-				"Access-Control-Allow-Origin":      "*",
+				"Access-Control-Allow-Origin":      "http://kumi.io",
 				"Access-Control-Allow-Methods":     "",
 				"Access-Control-Allow-Headers":     "",
 				"Access-Control-Allow-Credentials": "",
@@ -233,7 +233,7 @@ func TestCors(t *testing.T) {
 			headers: map[string]string{
 				"Allow": "PUT, DELETE, OPTIONS",
 				"Vary":  "",
-				"Access-Control-Allow-Origin":      "*",
+				"Access-Control-Allow-Origin":      "http://kumi.io",
 				"Access-Control-Allow-Methods":     "PUT, DELETE, OPTIONS",
 				"Access-Control-Allow-Headers":     "",
 				"Access-Control-Allow-Credentials": "true",
@@ -255,7 +255,7 @@ func TestCors(t *testing.T) {
 			headers: map[string]string{
 				"Allow": "GET, HEAD, OPTIONS",
 				"Vary":  "",
-				"Access-Control-Allow-Origin":      "*",
+				"Access-Control-Allow-Origin":      "http://kumi.io",
 				"Access-Control-Allow-Methods":     "GET, HEAD, OPTIONS",
 				"Access-Control-Allow-Headers":     "",
 				"Access-Control-Allow-Credentials": "",
@@ -332,7 +332,7 @@ func TestCorsPreflight(t *testing.T) {
 	expected := map[string]string{
 		"Allow": "GET, HEAD, OPTIONS",
 		"Vary":  "",
-		"Access-Control-Allow-Origin":      "*",
+		"Access-Control-Allow-Origin":      "http://kumi.io",
 		"Access-Control-Allow-Methods":     "GET, HEAD, OPTIONS",
 		"Access-Control-Allow-Headers":     "",
 		"Access-Control-Allow-Credentials": "",

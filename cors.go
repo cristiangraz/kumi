@@ -120,7 +120,7 @@ func (e *Engine) CorsOptions(ac *CorsOptions) HandlerFunc {
 		var allow bool
 		for _, ao := range ac.AllowOrigin {
 			if ao == "*" {
-				c.Header().Set(corsAllowOrigin, "*")
+				c.Header().Set(corsAllowOrigin, reqOrigin) // Mirror the origin
 				allow = true
 				break
 			} else if ao == reqOrigin {
