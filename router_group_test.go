@@ -1,428 +1,539 @@
-package kumi
+package kumi_test
 
 import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/cristiangraz/kumi"
 )
 
-var (
-	// Middleware and handler functions used in a variety of tests.
-	mw1 = func(c *Context) {
-		c.Write([]byte("mw1"))
-		c.Next()
-	}
-
-	mw2 = func(c *Context) {
-		c.Write([]byte("mw2"))
-		c.Next()
-	}
-
-	haltMw = func(c *Context) {
-		c.Write([]byte("stopping"))
-	}
-
-	h1 = func(c *Context) {
-		c.Write([]byte("h1"))
-	}
-
-	h2 = func(c *Context) {
-		c.Write([]byte("h2"))
-	}
-)
-
-func TestRouterGroup(t *testing.T) {
-	suite := []struct {
-		global, handlers, groupHandlers []Handler
-		expected                        []Handler
-		groupPrefix                     string
-	}{
-		{
-			handlers: []Handler{mw1, mw2},
-			expected: []Handler{mw1, mw2},
-		},
-		{
-			handlers: []Handler{mw2, h1},
-			expected: []Handler{mw2, h1},
-		},
-		{
-			global:   []Handler{mw1, mw2},
-			handlers: []Handler{h2},
-			expected: []Handler{mw1, mw2, h2},
-		},
-		// Grouping
-		{
-			groupPrefix:   "/articles",
-			groupHandlers: []Handler{mw1},
-			handlers:      []Handler{h2},
-			expected:      []Handler{mw1, h2},
-		},
-		{
-			global:        []Handler{mw2},
-			groupPrefix:   "/articles",
-			groupHandlers: []Handler{mw1},
-			handlers:      []Handler{h1},
-			expected:      []Handler{mw2, mw1, h1},
-		},
-		{
-			global:      []Handler{mw2},
-			groupPrefix: "/articles",
-			handlers:    []Handler{h1},
-			expected:    []Handler{mw2, h1},
-		},
-		{
-			groupPrefix: "/articles",
-			handlers:    []Handler{h1},
-			expected:    []Handler{h1},
-		},
-	}
-
-	for _, s := range suite {
-		router := &testRouter{}
-		k := New(router)
-		wh, err := wrapHandlers(s.expected...)
-		if err != nil {
-			t.Fatal("TestRouterGroup: Expected handlers were not valid for tests.")
+func TestRouterGroup_ResponseWriterSet(t *testing.T) {
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+		if _, ok := w.(kumi.ResponseWriter); !ok {
+			t.Fatalf("writer is not kumi.ResponseWriter: %T", w)
+		} else if _, ok := w.(*kumi.BodylessResponseWriter); ok {
+			t.Fatal("unexpected BodylessResponseWriter")
 		}
-		expected := appendHandlers(wh)
+	})
 
-		if len(s.global) > 0 {
-			k.Use(s.global...)
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	}
+}
+
+func TestRouterGroup_ContextSet(t *testing.T) {
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+
+		if name := kumi.Context(r).Query.Get("name"); name != "foo" {
+			t.Fatalf("unexpected name: %s", name)
+		}
+	})
+
+	r, _ := http.NewRequest("GET", "/?name=foo", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	}
+}
+
+func TestRouterGroup_HeadRequestUseBodylessWriter(t *testing.T) {
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Head("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+		if _, ok := w.(*kumi.BodylessResponseWriter); !ok {
+			t.Fatalf("writer is not kumi.BodylessResponseWriter: %T", w)
+		}
+	})
+
+	r, _ := http.NewRequest("HEAD", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	}
+}
+
+// Test middleware combinations via use, on route, and ordering.
+func TestRouterGroup_Middleware_Global(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
+
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Use(a, b, c)
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	} else if w.Body.String() != "abcCBA" {
+		t.Fatalf("unexpected order: %s", w.Body.String())
+	}
+}
+
+// Test middleware combinations via use, on route, and ordering.
+func TestRouterGroup_Middleware_GlobalOneByOne(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
+
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Use(c)
+	k.Use(b)
+	k.Use(a)
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	} else if w.Body.String() != "cbaABC" {
+		t.Fatalf("unexpected order: %s", w.Body.String())
+	}
+}
+
+func TestRouterGroup_Middleware_Local(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
+
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Get("/", a, b, c, func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	} else if w.Body.String() != "abcCBA" {
+		t.Fatalf("unexpected order: %s", w.Body.String())
+	}
+}
+
+func TestRouterGroup_Middleware_LocalGlobal(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
+
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Use(a, b)
+	k.Get("/", a, b, c, func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	} else if w.Body.String() != "ababcCBABA" {
+		t.Fatalf("unexpected order: %s", w.Body.String())
+	}
+}
+
+func TestRouterGroup_Middleware_LocalGlobalHalt(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
+	halt := tagHaltMiddleware("*")
+
+	var ran bool
+	k := kumi.New(&Router{})
+	k.Use(a, b)
+	k.Get("/", a, halt, c, func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran {
+		t.Fatalf("expected handler not to run")
+	} else if w.Body.String() != "aba*ABA" {
+		t.Fatalf("unexpected order: %s", w.Body.String())
+	}
+}
+
+func TestRouterGroup_Methods(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
+
+	for _, method := range kumi.HTTPMethods {
+		var ran bool
+		k := kumi.New(&Router{})
+		k.Use(a, c, b)
+
+		h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { ran = true })
+
+		switch method {
+		case kumi.GET:
+			k.Get("/", h)
+		case kumi.HEAD:
+			k.Head("/", h)
+		case kumi.POST:
+			k.Post("/", h)
+		case kumi.PUT:
+			k.Put("/", h)
+		case kumi.PATCH:
+			k.Patch("/", h)
+		case kumi.OPTIONS:
+			k.Options("/", h)
+		case kumi.DELETE:
+			k.Delete("/", h)
 		}
 
-		funcs := map[string]func(string, ...Handler){
-			"GET":     k.Get,
-			"POST":    k.Post,
-			"PUT":     k.Put,
-			"PATCH":   k.Patch,
-			"HEAD":    k.Head,
-			"OPTIONS": k.Options,
-			"DELETE":  k.Delete,
-		}
+		r, _ := http.NewRequest(method, "/", nil)
+		w := httptest.NewRecorder()
+		k.ServeHTTP(w, r)
 
-		var g RouterGroup
-		if s.groupPrefix != "" {
-			g = k.Group(s.groupPrefix, s.groupHandlers...)
-			funcs = map[string]func(string, ...Handler){
-				"GET":     g.Get,
-				"POST":    g.Post,
-				"PUT":     g.Put,
-				"PATCH":   g.Patch,
-				"HEAD":    g.Head,
-				"OPTIONS": g.Options,
-				"DELETE":  g.Delete,
-			}
-		}
-
-		for m, fn := range funcs {
-			fn("/abc", s.handlers...)
-			h, ok := router.Lookup(m, fmt.Sprintf("%s%s", s.groupPrefix, "/abc"))
-			if !ok {
-				t.Errorf("TestRouterGroup (%s): Expected registered route to be found", m)
-			}
-
-			for i, e := range expected {
-				if !funcEqual(h[i], e) {
-					t.Errorf("TestRouterGroup (%s): Expected handlers to match", m)
-				}
-			}
+		if !ran {
+			t.Fatalf("expected handler to run: %s", method)
+		} else if method == kumi.HEAD && w.Body.String() != "" {
+			t.Fatalf("no response body should be outputted on HEAD requests: %s", w.Body.String())
+		} else if method != kumi.HEAD && w.Body.String() != "acbBCA" {
+			t.Fatalf("unexpected middleware order: %s: %s", method, w.Body.String())
 		}
 	}
 }
 
-func TestRouterGroupGETCreatedHEAD(t *testing.T) {
-	router := &testRouter{}
-	k := New(router)
+func TestRouterGroup_All(t *testing.T) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+	c := tagMiddleware("c")
 
-	handlers := []Handler{h2}
-	k.Get("/hello", handlers...)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(r.Method)) })
 
-	_, ok := router.Lookup("GET", "/hello")
-	if !ok {
-		t.Errorf("TestRouterGroupGETCreatedHEAD: Expected GET route to be found")
-	}
+	k := kumi.New(&Router{})
+	k.Use(a, c, b)
+	k.All("/", h)
 
-	_, ok = router.Lookup("HEAD", "/hello")
-	if !ok {
-		t.Errorf("TestRouterGroupGETCreatedHEAD: Expected HEAD route to be found")
-	}
-}
+	for _, method := range kumi.HTTPMethods {
+		r, _ := http.NewRequest(method, "/", nil)
+		w := httptest.NewRecorder()
+		k.ServeHTTP(w, r)
 
-func TestRouterGroupAll(t *testing.T) {
-	router := &testRouter{}
-	k := New(router)
-
-	handlers := []Handler{h1}
-	wh, err := wrapHandlers(handlers...)
-	if err != nil {
-		t.Fatal("TestRouterGroupAll: Expected handlers were not valid for tests.")
-	}
-	expected := appendHandlers(wh)
-
-	k.All("/all", handlers...)
-	for _, m := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"} {
-		h, ok := router.Lookup(m, "/all")
-		if !ok {
-			t.Errorf("TestRouterGroupAll (%s): Expected registered route to be found", m)
-		}
-
-		if !funcEqual(h[0], expected[0]) {
-			t.Errorf("TestRouterGroupAll (%s): Expected handlers to match", m)
+		if method == kumi.HEAD && w.Body.String() != "" {
+			t.Fatalf("no response body should be outputted on HEAD requests: %s", w.Body.String())
+		} else if method != kumi.HEAD && w.Body.String() != fmt.Sprintf("acb%sBCA", method) {
+			t.Fatalf("unexpected middleware order: %s: %s", method, w.Body.String())
 		}
 	}
 }
 
-func TestGetRegistersHead(t *testing.T) {
-	k := New(&testRouter{})
+func TestRouterGroup_HeadAddedToGetRequests(t *testing.T) {
+	var ran bool
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { ran = true })
 
-	rec := httptest.NewRecorder()
-	req, _ := http.NewRequest("HEAD", "/foo", nil)
+	k := kumi.New(&Router{})
+	k.Get("/", h)
 
-	k.Get("/foo", testHandler)
-	k.ServeHTTP(rec, req)
+	r, _ := http.NewRequest("HEAD", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
 
-	if rec.Code >= 200 && rec.Code < 300 {
+	if !ran {
+		t.Fatal("expected handler to run")
+	}
+}
+
+// Not sending an http.Handler should panic.
+func TestRouterGroup_NoHandler(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected a panic")
+		}
+	}()
+
+	k := kumi.New(&Router{})
+	k.Get("/")
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+}
+
+// Not sending an http.Handler should panic even with global middleware.
+func TestRouterGroup_GlobalMiddlewareNoHandler(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected a panic")
+		}
+	}()
+
+	k := kumi.New(&Router{})
+	k.Use(tagMiddleware("*"))
+	k.Get("/")
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+}
+
+// Sending middleware and no http.Handler should panic
+func TestRouterGroup_MiddlewareNoHandler(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected a panic")
+		}
+	}()
+
+	k := kumi.New(&Router{})
+	k.Get("/", tagMiddleware("*"))
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+}
+
+// Sending an http handler followed by middleware should panic.
+func TestRouterGroup_HandlerThenMiddleware(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected a panic")
+		}
+	}()
+
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	k := kumi.New(&Router{})
+	k.Get("/", h, tagMiddleware("*"))
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+}
+
+type handler struct{}
+
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {}
+
+// Using an http.Handler instead of an http.HandlerFunc should panic.
+func TestRouterGroup_HTTPHandler(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected a panic")
+		}
+	}()
+
+	var h handler
+	k := kumi.New(&Router{})
+	k.Get("/", h)
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+}
+
+// Each router must implement it's own not found handler. This test is specific to
+// our test router, but does verify that the middleware and handler are
+// compiled properly.
+func TestRouterGroup_NotFoundHandler(t *testing.T) {
+	var ran bool
+	a := quietMiddleware("a")
+	b := quietMiddleware("b")
+	c := quietMiddleware("c")
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("404"))
+	})
+
+	k := kumi.New(&Router{})
+	k.Use(a, b, c)
+	k.NotFoundHandler(h)
+	k.Get("/some-misc-path", tagMiddleware("*"), func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not run")
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if !ran {
+		t.Fatal("not found handler did not run")
+	} else if w.Code != http.StatusNotFound {
+		t.Fatalf("unexpected code: %d", w.Code)
+	} else if w.Body.String() != "404" {
+		t.Fatalf("unexpected middleware order: %s", w.Body.String())
+	} else if w.Header().Get("a") == "" {
+		t.Fatalf("expected a to run")
+	} else if w.Header().Get("b") == "" {
+		t.Fatalf("expected b to run")
+	} else if w.Header().Get("c") == "" {
+		t.Fatalf("expected c to run")
+	}
+}
+
+// Each router must implement it's own method not allowed handler. This test is specific to
+// our test router, but does verify that the middleware and handler are
+// compiled properly.
+func TestRouterGroup_MethodNotAllowedHandler(t *testing.T) {
+	var ran bool
+	a := quietMiddleware("a")
+	b := quietMiddleware("b")
+	c := quietMiddleware("c")
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte("method_not_allowed"))
+	})
+
+	k := kumi.New(&Router{})
+	k.Use(a, b, c)
+	k.MethodNotAllowedHandler(h)
+	k.Get("/", tagMiddleware("*"), func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not run")
+	})
+
+	r, _ := http.NewRequest("POST", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if !ran {
+		t.Fatal("method not allowed handler did not run")
+	} else if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("unexpected code: %d", w.Code)
+	} else if w.Body.String() != "method_not_allowed" {
+		t.Fatalf("unexpected middleware order: %s", w.Body.String())
+	} else if w.Header().Get("a") == "" {
+		t.Fatalf("expected a to run")
+	} else if w.Header().Get("b") == "" {
+		t.Fatalf("expected b to run")
+	} else if w.Header().Get("c") == "" {
+		t.Fatalf("expected c to run")
+	}
+}
+
+// Router used for testing.
+type Router struct {
+	routes           map[string]map[string]http.Handler
+	notFound         http.Handler
+	methodNotAllowed http.Handler
+}
+
+func (router *Router) Handle(method string, pattern string, handler http.Handler) {
+	if router.routes == nil {
+		router.routes = make(map[string]map[string]http.Handler, 1)
+	}
+	if _, ok := router.routes[method]; !ok {
+		router.routes[method] = make(map[string]http.Handler, 1)
+	}
+	router.routes[method][pattern] = handler
+}
+
+func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if ok := router.HasRoute(r.Method, r.URL.Path); ok {
+		h, _ := router.routes[r.Method][r.URL.Path]
+		h.ServeHTTP(w, r)
 		return
 	}
 
-	t.Errorf("TestGetRegistersHead: Expected HEAD route to be found when GET route was registered. Status: %d", rec.Code)
-}
-
-func TestInvalidHandlers(t *testing.T) {
-	wrong := func() {}
-	k := New(&testRouter{})
-	suite := []struct {
-		fn func()
-	}{
-		{
-			fn: func() {
-				k.Group("/", wrong)
-			},
-		},
-		{
-			fn: func() {
-				k.Use(wrong)
-			},
-		},
-		{
-			fn: func() {
-				k.handle("GET", "/", mw1, wrong)
-			},
-		},
+	var methods []string
+	for _, m := range kumi.HTTPMethods {
+		if router.HasRoute(m, r.URL.Path) {
+			methods = append(methods, m)
+		}
 	}
 
-	for _, s := range suite {
-		func() {
-			recovered := false
-			defer func() {
-				if err := recover(); err != nil {
-					recovered = true
-				}
-			}()
-
-			s.fn()
-
-			if !recovered {
-				t.Errorf("TestInvalidHandlers: Expected invalid handler to panic")
-			}
-		}()
+	if len(methods) > 0 {
+		w.Header().Set("Allow", strings.Join(methods, ", "))
+		if router.methodNotAllowed != nil {
+			router.methodNotAllowed.ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	} else if router.notFound != nil {
+		router.notFound.ServeHTTP(w, r)
+	} else {
+		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
-func TestNotFoundHandler(t *testing.T) {
-	for _, inheritMiddleware := range []bool{true, false} {
-		r := &testRouter{}
-		k := New(r)
+func (router *Router) NotFoundHandler(h http.Handler) {
+	router.notFound = h
+}
 
-		nfh := func(c *Context) {
-			c.Header().Set("X-Not-Found-Handler", "True")
-			c.WriteHeader(http.StatusNotFound)
-		}
+func (router *Router) MethodNotAllowedHandler(h http.Handler) {
+	router.methodNotAllowed = h
+}
 
-		mw := func(c *Context) {
-			c.Header().Set("X-Middleware-Ran", "True")
-			c.Next()
-		}
+func (router *Router) HasRoute(method string, pattern string) bool {
+	if router.routes == nil {
+		return false
+	} else if routes, ok := router.routes[method]; !ok {
+		return false
+	} else if _, ok := routes[pattern]; ok {
+		return true
+	}
+	return false
+}
 
-		// Set Global middleware to run
-		k.Use(mw)
-
-		// Set NotFoundHandler
-		k.NotFoundHandler(inheritMiddleware, nfh)
-
-		// NotFoundHandler should include global middleware
-		expectedLength := 1
-		if inheritMiddleware {
-			expectedLength = 2
-		}
-		if len(r.notFound) != expectedLength {
-			t.Error("TestNotFoundHandler: Expected not found handler to have two routes")
-		}
-
-		rec := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/not-found-path", nil)
-
-		c := k.NewContext(rec, req)
-		k.ServeHTTP(c, c.Request)
-		k.ReturnContext(c)
-
-		if rec.Code != http.StatusNotFound {
-			t.Errorf("Expected not found handler to return 404, given %d", rec.Code)
-		}
-
-		if rec.Header().Get("X-Not-Found-Handler") != "True" {
-			t.Error("TestNotFoundHandler: Expected X-Not-Found-Handler header")
-		}
-
-		// Ensure global middleware ran on NFH when inheritMiddleware = true
-		expectedMw := ""
-		if inheritMiddleware {
-			expectedMw = "True"
-		}
-		if rec.Header().Get("X-Middleware-Ran") != expectedMw {
-			t.Error("TestNotFoundHandler: Expected X-Middleware-Ran header")
-		}
+// A constructor for middleware that writes a "tag" to the ResponseWriter
+// for testing middleware ordering. Credit github.com/justinas/alice
+// This variation writes the tag before and after to verify middleware flow.
+func tagMiddleware(tag string) kumi.MiddlewareFn {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(strings.ToLower(tag)))
+			h.ServeHTTP(w, r)
+			w.Write([]byte(strings.ToUpper(tag)))
+		})
 	}
 }
 
-func TestMethodNotAllowedHandlers(t *testing.T) {
-	mnah := func(c *Context) {
-		c.Header().Set("X-Method-Not-Allowed-Handler", "True")
-		c.WriteHeader(http.StatusMethodNotAllowed)
-	}
-
-	mw := func(c *Context) {
-		c.Header().Set("X-Middleware-Ran", "True")
-		c.Next()
-	}
-
-	r := &testRouter{}
-	k := New(r)
-
-	// Global Middleware
-	k.Use(mw)
-
-	k.Patch("/path")
-	k.Delete("/path")
-
-	expected := []string{"PATCH", "DELETE"}
-	for _, inheritMiddleware := range []bool{true, false} {
-		// Set MethodNotAllowedHandler
-		k.MethodNotAllowedHandler(inheritMiddleware, mnah)
-
-		rec := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/path", nil)
-
-		c := k.NewContext(rec, req)
-		k.ServeHTTP(c, c.Request)
-		k.ReturnContext(c)
-
-		if rec.Code != http.StatusMethodNotAllowed {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected method not allowed handler to return 405, given %d", rec.Code)
-		}
-
-		// Ensure NFH ran
-		if rec.Header().Get("X-Method-Not-Allowed-Handler") != "True" {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected X-Method-Not-Allowed-Handler header")
-		}
-
-		if rec.Header().Get("Allow") == "" {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected Allow header. None given")
-		}
-
-		given := strings.Split(rec.Header().Get("Allow"), ", ")
-		if len(given) != 2 {
-			t.Fatalf("TestmMethodNotAllowedHandlers: Expected allow header with 2 methods. %d given", len(given))
-		}
-
-		if !((given[0] == "PATCH" && given[1] == "DELETE") || (given[0] == "DELETE" && given[1] == "PATCH")) {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected allow header to contain %q, given %q", expected, given)
-		}
-
-		// Ensure global middleware ran on NFH when inheritMiddleware = true
-		expectedMw := ""
-		if inheritMiddleware {
-			expectedMw = "True"
-		}
-		if rec.Header().Get("X-Middleware-Ran") != expectedMw {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected X-Middleware-Ran header")
-		}
+// TagHalt middleware outputs a tag then does not call the next handler
+// to halt the middleware chain.
+func tagHaltMiddleware(tag string) kumi.MiddlewareFn {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(strings.ToLower(tag)))
+		})
 	}
 }
 
-// Test that using global cors registers an OPTIONS handler for the
-// route
-func TestMethodNotAllowedHandlersWithCorsRegistersOptions(t *testing.T) {
-	mnah := func(c *Context) {
-		c.Header().Set("X-Method-Not-Allowed-Handler", "True")
-		c.WriteHeader(http.StatusMethodNotAllowed)
+// TagHalt middleware sets a header tag to mark it's existence but not send
+// a response.
+func quietMiddleware(tag string) kumi.MiddlewareFn {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(tag, "true")
+			h.ServeHTTP(w, r)
+		})
 	}
-
-	mw := func(c *Context) {
-		c.Header().Set("X-Middleware-Ran", "True")
-		c.Next()
-	}
-
-	r := &testRouter{}
-	k := New(r)
-	k.SetGlobalCors(&CorsOptions{AllowMethods: []string{"GET", "HEAD"}})
-
-	// Global Middleware
-	k.Use(mw)
-
-	k.Post("/path")
-
-	expected := []string{"POST", "OPTIONS"}
-	for _, inheritMiddleware := range []bool{true, false} {
-		// Set MethodNotAllowedHandler
-		k.MethodNotAllowedHandler(inheritMiddleware, mnah)
-
-		rec := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/path", nil)
-
-		c := k.NewContext(rec, req)
-		k.ServeHTTP(c, c.Request)
-		k.ReturnContext(c)
-
-		if rec.Code != http.StatusMethodNotAllowed {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected method not allowed handler to return 405, given %d", rec.Code)
-		}
-
-		// Ensure NFH ran
-		if rec.Header().Get("X-Method-Not-Allowed-Handler") != "True" {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected X-Method-Not-Allowed-Handler header")
-		}
-
-		if rec.Header().Get("Allow") == "" {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected Allow header. None given")
-		}
-
-		given := strings.Split(rec.Header().Get("Allow"), ", ")
-		if len(given) != 2 {
-			t.Fatalf("TestmMethodNotAllowedHandlers: Expected allow header with 2 methods. %d given", len(given))
-		}
-
-		if !((given[0] == "POST" && given[1] == "OPTIONS") || (given[0] == "OPTIONS" && given[1] == "POST")) {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected allow header to contain %q, given %q", expected, given)
-		}
-
-		// Ensure global middleware ran on NFH when inheritMiddleware = true
-		expectedMw := ""
-		if inheritMiddleware {
-			expectedMw = "True"
-		}
-		if rec.Header().Get("X-Middleware-Ran") != expectedMw {
-			t.Errorf("TestMethodNotAllowedHandlers: Expected X-Middleware-Ran header")
-		}
-	}
-}
-
-func funcEqual(a, b Handler) bool {
-	av := reflect.ValueOf(&a).Elem()
-	bv := reflect.ValueOf(&b).Elem()
-
-	return av.InterfaceData() == bv.InterfaceData()
 }

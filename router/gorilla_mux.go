@@ -11,67 +11,44 @@ import (
 // GorillaMuxRouter wraps the mux.Router router and meets the
 // kumi.Router interface.
 type GorillaMuxRouter struct {
-	Router   *mux.Router
-	engine   *kumi.Engine
-	routes   map[string][]string
-	notFound []kumi.HandlerFunc
+	router   *mux.Router
+	store    *Store
+	notFound http.Handler
 }
+
+var _ kumi.Router = &GorillaMuxRouter{}
 
 // NewGorillaMuxRouter creates a new instance of a default mux.Router.
 // If you need to set custom options, you should instantiate GorillaMuxRouter
 // yourself.
 func NewGorillaMuxRouter() *GorillaMuxRouter {
-	r := map[string][]string{}
-	for _, m := range kumi.HTTPMethods {
-		r[m] = []string{}
-	}
-
 	return &GorillaMuxRouter{
-		Router: mux.NewRouter(),
-		routes: r,
+		router: mux.NewRouter(),
+		store:  &Store{},
 	}
 }
 
 // Handle ...
-func (router *GorillaMuxRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
-	router.Router.HandleFunc(pattern, func(rw http.ResponseWriter, r *http.Request) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
+func (router *GorillaMuxRouter) Handle(method string, pattern string, next http.Handler) {
+	router.router.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if p := mux.Vars(r); len(p) > 0 {
-			c.Params = kumi.Params(p)
+			r = kumi.SetParams(r, p)
 		}
-
-		c.Next()
+		next.ServeHTTP(w, r)
 	}).Methods(method)
 
-	router.routes[method] = append(router.routes[method], pattern)
-}
-
-// SetEngine sets the kumi engine on the router.
-func (router *GorillaMuxRouter) SetEngine(e *kumi.Engine) {
-	router.engine = e
-}
-
-// Engine retrieves the kumi engine.
-func (router *GorillaMuxRouter) Engine() *kumi.Engine {
-	return router.engine
+	router.store.Save(method, pattern)
 }
 
 // ServeHTTP ...
-func (router *GorillaMuxRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	router.Router.ServeHTTP(rw, r)
+func (router *GorillaMuxRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	router.router.ServeHTTP(w, r)
 }
 
 // NotFoundHandler ...
-func (router *GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
+func (router *GorillaMuxRouter) NotFoundHandler(h http.Handler) {
 	router.notFound = h
-	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
-		c.Next()
-	})
+	router.router.NotFoundHandler = h
 }
 
 // MethodNotAllowedHandler registers handlers to respond to Method Not
@@ -79,31 +56,24 @@ func (router *GorillaMuxRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
 // this method registers a NotFoundHandler that looks for route matches
 // to determine if the 404 has matches against other methods. If so,
 // the MethodNotAllowed handlers run. Otherwise, the NotFound handlers run.
-func (router *GorillaMuxRouter) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
-	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+func (router *GorillaMuxRouter) MethodNotAllowedHandler(next http.Handler) {
+	router.router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		methods := router.getMethods(r)
-		var c *kumi.Context
 		if len(methods) > 0 {
-			// At least one match against an HTTP method. 405 Not Allowed
-			c = router.engine.NewContext(rw, r, h...)
-
-			c.Header().Set("Allow", strings.Join(methods, ", "))
+			w.Header().Set("Allow", strings.Join(methods, ", "))
 		} else {
 			// 404
-			if len(router.notFound) > 0 {
+			if router.notFound != nil {
 				// 404 handler is defined by user
-				c = router.engine.NewContext(rw, r, router.notFound...)
+				next = router.notFound
 			} else {
 				// Fallback 404
-				c = router.engine.NewContext(rw, r, func(c *kumi.Context) {
-					http.NotFoundHandler().ServeHTTP(c, c.Request)
-				})
+				http.NotFoundHandler().ServeHTTP(w, r)
+				return
 			}
 		}
 
-		defer router.engine.ReturnContext(c)
-
-		c.Next()
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -115,7 +85,7 @@ func (router *GorillaMuxRouter) getMethods(r *http.Request) (methods []string) {
 		reqCopy.Method = m
 
 		var routeMatch mux.RouteMatch
-		if router.Router.Match(&reqCopy, &routeMatch) && routeMatch.Route != nil {
+		if router.router.Match(&reqCopy, &routeMatch) && routeMatch.Route != nil {
 			methods = append(methods, m)
 		}
 	}
@@ -126,11 +96,5 @@ func (router *GorillaMuxRouter) getMethods(r *http.Request) (methods []string) {
 // HasRoute returns true if the router has registered a route with that
 // method and pattern.
 func (router *GorillaMuxRouter) HasRoute(method string, pattern string) bool {
-	for _, p := range router.routes[method] {
-		if p == pattern {
-			return true
-		}
-	}
-
-	return false
+	return router.store.HasRoute(method, pattern)
 }

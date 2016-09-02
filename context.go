@@ -1,142 +1,79 @@
 package kumi
 
 import (
+	"context"
 	"net/http"
 	"sync"
-
-	"github.com/cristiangraz/kumi/cache"
-	"golang.org/x/net/context"
 )
 
-// Context holds contextual data for each request and
-// implements the http.ResponseWriter interface.
-type Context struct {
-	http.ResponseWriter
-	context.Context
-	Request      *http.Request
-	CacheHeaders *cache.Headers
-	Query        Query
-	Params       Params
-
-	engine      *Engine
-	writeHeader sync.Once
-	handlers    []HandlerFunc
-	status      int
+// RequestContext ...
+type RequestContext struct {
+	Params Params
+	Query  *Query
 }
 
 type key int
 
 const (
-	panicKey key = iota
+	contextKey key = iota
+	paramsKey
 )
 
-// Status returns the http status code. If none has been set,
-// http.StatusOK (200) will be returned.
-func (c *Context) Status() int {
-	if c.status == 0 {
-		return http.StatusOK
-	}
-
-	return c.status
+// Context retrieves the request context.
+func Context(r *http.Request) *RequestContext {
+	return FromContext(r).(*RequestContext)
 }
 
-// WriteHeader prepares the response once. If no Cache-Control header is set,
-// one will be sent using sensible defaults. Otherwise, any Cache-Control
-// headers added to c.CacheHeaders will be sent.
-// If a 204 No Content response is being sent, or the BodylessResponseWriter is in use,
-// No Content-Type header will be sent.
-func (c *Context) WriteHeader(s int) {
-	c.writeHeader.Do(func() {
-		hasBody := true
-		if s == http.StatusNoContent {
-			hasBody = false
-			c.ResponseWriter = &BodylessResponseWriter{c.ResponseWriter}
-		} else if _, ok := c.ResponseWriter.(*BodylessResponseWriter); ok {
-			hasBody = false
-		}
-
-		c.status = s
-		if c.Header().Get("Cache-Control") == "" {
-			c.Header().Set("Cache-Control", c.CacheHeaders.SensibleDefaults(c.Header(), s))
-		}
-
-		ct := c.Header().Get("Content-Type")
-		if hasBody && ct == "" {
-			c.Header().Set("Content-Type", "text/plain")
-		} else if !hasBody {
-			c.Header().Del("Content-Type")
-		}
-
-		c.ResponseWriter.WriteHeader(s)
-	})
+// SetRequestContext sets a custom value in kumi's Context slot.
+func SetRequestContext(r *http.Request, c interface{}) *http.Request {
+	ctx := context.WithValue(r.Context(), contextKey, c)
+	return r.WithContext(ctx)
 }
 
-// Writes the response.
-func (c *Context) Write(p []byte) (int, error) {
-	c.WriteHeader(http.StatusOK)
-	return c.ResponseWriter.Write(p)
+// FromContext allows you to create your own Context function that returns a
+// specific RequestContext type custom to your application, while still protecting
+// the context key within kumi. In that case, use FromContext instead of Context.
+func FromContext(r *http.Request) interface{} {
+	return r.Context().Value(contextKey)
 }
 
-// Next runs the next handler in the chain. It should be called from all of your
-// middleware except the last http handler. If you don't call it from your handler,
-// no additional handlers will be called.
-func (c *Context) Next() {
-	if len(c.handlers) == 0 {
-		return
-	}
-
-	h := c.handlers[0]
-	c.handlers = c.handlers[1:]
-
-	h(c)
+// SetParams sets Params in the context for kumi to access. These will be
+// moved to the RequestContext immediately after the router sets them.
+// This should only be called from a Router.
+func SetParams(r *http.Request, p Params) *http.Request {
+	ctx := context.WithValue(r.Context(), paramsKey, p)
+	return r.WithContext(ctx)
 }
 
-// ServeHTTP makes context compatible with the http.Handler interface.
-func (c *Context) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	c.Next()
+func getParams(r *http.Request) (Params, bool) {
+	p, ok := r.Context().Value(paramsKey).(Params)
+	return p, ok
 }
 
-// newContext creates a new context for the sync pool.
-func newContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
-	var once sync.Once
-
-	return &Context{
-		Context:        context.Background(),
-		Request:        r,
-		ResponseWriter: rw,
-		CacheHeaders:   cache.New(),
-		handlers:       handlers,
-		Query:          Query{r},
-
-		writeHeader: once,
-		status:      0,
-	}
+var requestContextPool = &sync.Pool{
+	New: func() interface{} {
+		return &RequestContext{}
+	},
 }
 
-// reset resets the context.
-func (c *Context) reset(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) {
-	var params Params
-	var once sync.Once
+// newRequestContext returns a new RequestContext from the pool.
+func newRequestContext(r *http.Request) *RequestContext {
+	rc := requestContextPool.Get().(*RequestContext)
+	rc.Params = nil
+	rc.Query = &Query{request: r}
 
-	c.Context = context.Background()
-	c.Request = r
-	c.ResponseWriter = rw
-	c.CacheHeaders = cache.New()
-	c.handlers = handlers
-	c.Query = Query{r}
-	c.Params = params
-
-	c.writeHeader = once
-	c.status = 0
+	return rc
 }
 
-// NewContextWithException adds an exception to the context.
-func NewContextWithException(c *Context, exception interface{}) {
-	c.Context = context.WithValue(c.Context, panicKey, exception)
+// returnContext ...
+func returnContext(rc *RequestContext) {
+	requestContextPool.Put(rc)
 }
 
-// Exception gets the "v" in panic(v). The panic details.
-// Only PanicHandler will receive a context you can use this with.
-func Exception(c *Context) interface{} {
-	return c.Context.Value(panicKey)
-}
+// Cache returns cache.Headers for setting Cache-Control headers.
+// func (c *RequestContext) Cache() *cache.Headers {
+// 	if c.cache == nil {
+// 		c.cache = cache.New()
+// 	}
+// 	return c.cache
+// }

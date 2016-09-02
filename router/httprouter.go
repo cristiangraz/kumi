@@ -8,93 +8,65 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// HTTPRouter wraps the httprouter.Router router and meets the
+// HTTPRouter wraps the httprouter.router router and meets the
 // kumi.Router interface.
 type HTTPRouter struct {
-	Router *httprouter.Router
-	engine *kumi.Engine
+	router *httprouter.Router
 }
 
-// NewHTTPRouter creates a new instance of a default httptreemux router.
-// If you need to set custom options, you should instantiate HTTPRouter
-// yourself.
+var _ kumi.Router = &HTTPRouter{}
+
+// NewHTTPRouter creates a new instance of HTTPRouter.
 func NewHTTPRouter() *HTTPRouter {
 	return &HTTPRouter{
-		Router: httprouter.New(),
+		router: httprouter.New(),
 	}
 }
 
-// Handle ...
-func (router *HTTPRouter) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
-	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
+// Handle implements httprouter.Handler and converts the params to Params accessible
+// in the RequestContext.
+func (router *HTTPRouter) Handle(method string, pattern string, next http.Handler) {
+	router.router.Handle(method, pattern, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		if len(params) > 0 {
 			p := make(map[string]string, len(params))
 			for _, v := range params {
 				p[v.Key] = v.Value
 			}
-
-			c.Params = kumi.Params(p)
+			r = kumi.SetParams(r, p)
 		}
 
-		c.Next()
+		next.ServeHTTP(w, r)
 	})
 }
 
-// SetEngine sets the kumi engine on the router.
-func (router *HTTPRouter) SetEngine(e *kumi.Engine) {
-	router.engine = e
+// ServeHTTP calls httprouter's ServeHTTP method.
+func (router *HTTPRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	router.router.ServeHTTP(w, r)
 }
 
-// Engine retrieves the kumi engine.
-func (router *HTTPRouter) Engine() *kumi.Engine {
-	return router.engine
+// NotFoundHandler registers a handler to execute when no route is matched.
+func (router *HTTPRouter) NotFoundHandler(h http.Handler) {
+	router.router.NotFound = h
 }
 
-// ServeHTTP ...
-func (router *HTTPRouter) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	router.Router.ServeHTTP(rw, r)
-}
-
-// NotFoundHandler ...
-func (router *HTTPRouter) NotFoundHandler(h ...kumi.HandlerFunc) {
-	router.Router.NotFound = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
-		c.Next()
-	})
-}
-
-// MethodNotAllowedHandler ...
-func (router *HTTPRouter) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
-	router.Router.MethodNotAllowed = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
-		methods := router.getMethods(r)
-		c.Header().Set("Allow", strings.Join(methods, ", "))
-
-		c.Next()
-	})
-}
-
-// getMethods ...
-func (router *HTTPRouter) getMethods(r *http.Request) (methods []string) {
-	for _, m := range kumi.HTTPMethods {
-		if h, _, _ := router.Router.Lookup(m, r.URL.Path); h != nil {
-			methods = append(methods, m)
+// MethodNotAllowedHandler registers a handler to execute when the requested
+// method is not allowed.
+func (router *HTTPRouter) MethodNotAllowedHandler(h http.Handler) {
+	router.router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods := make([]string, 0, len(kumi.HTTPMethods))
+		for _, m := range kumi.HTTPMethods {
+			if h, _, _ := router.router.Lookup(m, r.URL.Path); h != nil {
+				methods = append(methods, m)
+			}
 		}
-	}
-
-	return methods
+		w.Header().Set("Allow", strings.Join(methods, ", "))
+		h.ServeHTTP(w, r)
+	})
 }
 
 // HasRoute returns true if the router has registered a route with that
 // method and pattern.
 func (router *HTTPRouter) HasRoute(method string, pattern string) bool {
-	h, _, _ := router.Router.Lookup(method, pattern)
+	h, _, _ := router.router.Lookup(method, pattern)
 	return h != nil
 }
