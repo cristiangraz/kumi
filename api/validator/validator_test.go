@@ -100,7 +100,7 @@ func TestValidator(t *testing.T) {
 			},
 		},
 		{
-			// Set tiny limit of 1 byte, exceed it
+			// Set limit of 1 byte, exceed it
 			schema:       schema,
 			payload:      []byte(`{"name": "Lilly", "city": "foo"}`),
 			limit:        1,
@@ -109,6 +109,32 @@ func TestValidator(t *testing.T) {
 				api.Error{
 					Type:    RequestBodyExceededError.Type,
 					Message: RequestBodyExceededError.Message,
+				},
+			},
+		},
+		{
+			// Set limit of 1 byte, exceed it before JSON is validated
+			schema:       schema,
+			payload:      []byte(`{ `),
+			limit:        1,
+			expectStatus: http.StatusBadRequest,
+			expect: []api.Error{
+				api.Error{
+					Type:    RequestBodyExceededError.Type,
+					Message: RequestBodyExceededError.Message,
+				},
+			},
+		},
+		{
+			// Set limit of 1 byte, match the limit exactly and expect a JSON error
+			schema:       schema,
+			payload:      []byte(`{`),
+			limit:        1,
+			expectStatus: http.StatusBadRequest,
+			expect: []api.Error{
+				api.Error{
+					Type:    InvalidJSONError.Type,
+					Message: InvalidJSONError.Message,
 				},
 			},
 		},

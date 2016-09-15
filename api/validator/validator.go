@@ -7,10 +7,8 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sync"
 
-	"golang.org/x/net/context"
-
-	"github.com/cristiangraz/kumi"
 	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -68,15 +66,18 @@ func NewSecondary(schema gojsonschema.JSONLoader, options *Options, limit int64,
 func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 	defer r.Body.Close()
 
-	var reader io.Reader = r.Body
+	limit := v.Options.Limit
 	if v.Limit > 0 {
-		reader = io.LimitReader(reader, v.Limit)
-	} else if v.Options.Limit > 0 {
-		reader = io.LimitReader(reader, v.Options.Limit)
+		limit = v.Limit
 	}
 
-	buf := new(bytes.Buffer)
-	tee := io.TeeReader(reader, buf)
+	limitReader := limitReaderPool.Get().(*io.LimitedReader)
+	limitReader.R = r.Body
+	limitReader.N = limit + 1 // extend by 1 byte, if N bytes are left to read we've hit max
+	defer limitReaderPool.Put(limitReader)
+
+	var buf bytes.Buffer
+	tee := io.TeeReader(limitReader, &buf)
 	if err := json.NewDecoder(tee).Decode(&dst); err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
@@ -87,17 +88,11 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 		default:
 			switch err {
 			case io.ErrUnexpectedEOF, io.EOF:
-				// If there are no bytes left to read on io.LimitedReader,
-				// then we hit a RequestBodyExceeded error.
-				if lr, ok := reader.(*io.LimitedReader); ok && lr.N == 0 {
+				if limitReader.N == 0 { // Nothing left to read on io.LimitedReader, body exceeded
 					return v.Options.RequestBodyExceeded
-				}
-
-				// Empty body
-				if len(buf.Bytes()) == 0 {
+				} else if limitReader.N == limit+1 { // Empty body
 					return v.Options.RequestBodyRequired
 				}
-
 				return v.Options.InvalidJSON
 			default:
 				// If not a json.UnmarshalTypeError, send InvalidJSON error.
@@ -149,27 +144,8 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 	return api.Failure(statusCode, e...)
 }
 
-// ContextValidator stores the validator in the context
-// for testing.
-type ContextValidator struct {
-	*Validator
-}
-
-// NewContext returns a validator that stores the validator in context for testing.
-// Internally it just wraps Validator.
-func NewContext(schema gojsonschema.JSONLoader, options *Options, limit int64) *ContextValidator {
-	return &ContextValidator{New(schema, options, limit)}
-}
-
-// NewSecondaryContext returns a secondary validator that stores the validator
-// in context for testing.
-func NewSecondaryContext(schema gojsonschema.JSONLoader, options *Options, limit int64, secondary SecondaryValidator) *ContextValidator {
-	return &ContextValidator{NewSecondary(schema, options, limit, secondary)}
-}
-
-// Valid stores the validator in the context for testing. The *http.Request is pulled
-// out of the kumi.Context.
-func (v *ContextValidator) Valid(dst interface{}, c *kumi.Context) api.Sender {
-	c.Context = context.WithValue(c.Context, "validator", v)
-	return v.Validator.Valid(dst, c.Request)
+var limitReaderPool = &sync.Pool{
+	New: func() interface{} {
+		return &io.LimitedReader{}
+	},
 }
