@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -15,28 +16,32 @@ var logger = &log.Logger{
 }
 
 // Logger registers the logger.
-func Logger(c *kumi.Context) {
-	start := time.Now()
-	defer func() {
-		entry := log.NewEntry(logger).WithFields(log.Fields{
-			"path":     c.Request.URL.Path,
-			"method":   c.Request.Method,
-			"status":   c.Status(),
-			"duration": time.Since(start),
-		})
-
-		if err := kumi.Exception(c); err != nil {
-			entry.Errorf("recovered from panic: %v", err)
+func Logger(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		rw, ok := w.(kumi.ResponseWriter)
+		if !ok {
+			next.ServeHTTP(w, r)
 			return
 		}
 
-		switch {
-		case c.Status() >= 400:
-			entry.Warn("")
-		default:
-			entry.Info("")
-		}
-	}()
+		start := time.Now()
+		defer func() {
+			entry := log.NewEntry(logger).WithFields(log.Fields{
+				"path":     r.URL.Path,
+				"method":   r.Method,
+				"status":   rw.Status(),
+				"duration": time.Since(start),
+			})
 
-	c.Next()
+			switch {
+			case rw.Status() >= 400:
+				entry.Warn("")
+			default:
+				entry.Info("")
+			}
+		}()
+
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
 }

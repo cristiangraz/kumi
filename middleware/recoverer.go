@@ -3,19 +3,18 @@ package middleware
 import (
 	"net/http"
 	"runtime/debug"
-
-	"github.com/cristiangraz/kumi"
 )
 
 // Recoverer returns a recoverer function to recover from panics.
-func Recoverer(c *kumi.Context) {
-	defer func() {
-		if err := recover(); err != nil {
-			debug.PrintStack()
-			kumi.NewContextWithException(c, err)
-			http.Error(c, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-	}()
+func Recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				debug.PrintStack()
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		}()
 
-	c.Next()
+		next.ServeHTTP(w, r)
+	})
 }

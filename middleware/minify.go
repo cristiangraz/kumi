@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cristiangraz/kumi"
 	"github.com/tdewolff/minify"
 	"github.com/tdewolff/minify/css"
 	"github.com/tdewolff/minify/html"
@@ -99,7 +98,7 @@ func (m *minifyResponseWriter) close() {
 var Minify = MinifyTypes("text/css", "text/javascript", "application/json", "text/xml")
 
 // MinifyTypes returns a custom minifier.
-func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
+func MinifyTypes(contentTypes ...string) func(http.Handler) http.Handler {
 	allowed := make(map[string]struct{}, len(contentTypes))
 	for _, t := range contentTypes {
 		allowed[t] = struct{}{}
@@ -112,16 +111,18 @@ func MinifyTypes(contentTypes ...string) kumi.HandlerFunc {
 	m.AddFunc("application/json", json.Minify)
 	m.AddFunc("text/xml", xml.Minify)
 
-	return func(c *kumi.Context) {
-		mrw := minifyResponseWriterPool.Get().(*minifyResponseWriter)
-		mrw.reset(c.ResponseWriter, m, allowed)
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			mrw := minifyResponseWriterPool.Get().(*minifyResponseWriter)
+			mrw.reset(w, m, allowed)
 
-		c.ResponseWriter = mrw
-		defer func() {
-			mrw.close()
-			minifyResponseWriterPool.Put(mrw)
-		}()
+			defer func() {
+				mrw.close()
+				minifyResponseWriterPool.Put(mrw)
+			}()
 
-		c.Next()
+			next.ServeHTTP(mrw, r)
+		}
+		return http.HandlerFunc(fn)
 	}
 }
