@@ -76,7 +76,7 @@ func Success(result interface{}) *Response {
 // statusCode should be >= 400 and <= 599
 func Failure(statusCode int, errors ...Error) *ErrorResponse {
 	code := strings.Replace(strings.ToLower(http.StatusText(statusCode)), " ", "_", -1)
-	if statusCode == 422 {
+	if statusCode == 422 { // As of Go 1.7, 422 is not defined for use with StatusText
 		code = "unprocessable_entity"
 	}
 
@@ -92,7 +92,7 @@ func Failure(statusCode int, errors ...Error) *ErrorResponse {
 // the first field as the error message.
 func (r ErrorResponse) Error() string {
 	if len(r.Errors) == 0 {
-		return "Unknown error"
+		return "unknown error"
 	}
 
 	e := r.Errors[0]
