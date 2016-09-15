@@ -1,7 +1,6 @@
 package kumi
 
 import (
-	"context"
 	"crypto/tls"
 	"net/http"
 	"strings"
@@ -10,7 +9,7 @@ import (
 	"github.com/justinas/alice"
 )
 
-// Engine is the glue that holds everything together.
+// Engine embeds RouterGroup and provides methods to start the server.
 type Engine struct {
 	RouterGroup
 }
@@ -75,9 +74,7 @@ func setup(next http.Handler) http.Handler {
 		default:
 			rw := newWriter(w)
 			w = rw
-			defer func() {
-				writerPool.Put(rw)
-			}()
+			defer writerPool.Put(rw)
 		}
 
 		r.Host = strings.ToLower(r.Host)
@@ -90,13 +87,11 @@ func setup(next http.Handler) http.Handler {
 
 		// Set the kumi request context
 		rc := newRequestContext(r)
-		defer returnContext(rc)
-
 		if p, ok := getParams(r); ok {
-			rc.Params = p
+			rc.params = p
 		}
-		ctx := context.WithValue(r.Context(), contextKey, rc)
+		next.ServeHTTP(w, SetRequestContext(r, rc))
 
-		next.ServeHTTP(w, r.WithContext(ctx))
+		returnContext(rc)
 	})
 }

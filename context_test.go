@@ -13,7 +13,7 @@ import (
 // The logger could be a struct with more methods, in this case it just holds
 // a single function.
 type CustomContext struct {
-	*kumi.RequestContext
+	kumi.RequestContext
 	Log func(msg string)
 }
 
@@ -44,7 +44,7 @@ func TestContext(t *testing.T) {
 	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		Context(r).Log("worked")
 
-		if got := Context(r).Query.Get("name"); got != "ctx" {
+		if got := Context(r).Query().Get("name"); got != "ctx" {
 			t.Fatalf("invalid query params: %s", got)
 		}
 	})

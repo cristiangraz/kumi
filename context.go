@@ -6,10 +6,11 @@ import (
 	"sync"
 )
 
-// RequestContext ...
-type RequestContext struct {
-	Params Params
-	Query  *Query
+// RequestContext returns route params and query params for the
+// current request.
+type RequestContext interface {
+	Params() Params
+	Query() *Query
 }
 
 type key int
@@ -20,13 +21,13 @@ const (
 )
 
 // Context retrieves the request context.
-func Context(r *http.Request) *RequestContext {
-	return FromContext(r).(*RequestContext)
+func Context(r *http.Request) RequestContext {
+	return FromContext(r).(RequestContext)
 }
 
 // SetRequestContext sets a custom value in kumi's Context slot.
-func SetRequestContext(r *http.Request, c interface{}) *http.Request {
-	ctx := context.WithValue(r.Context(), contextKey, c)
+func SetRequestContext(r *http.Request, rc RequestContext) *http.Request {
+	ctx := context.WithValue(r.Context(), contextKey, rc)
 	return r.WithContext(ctx)
 }
 
@@ -39,7 +40,7 @@ func FromContext(r *http.Request) interface{} {
 
 // SetParams sets Params in the context for kumi to access. These will be
 // moved to the RequestContext immediately after the router sets them.
-// This should only be called from a Router.
+// This should generally only be called from a Router.
 func SetParams(r *http.Request, p Params) *http.Request {
 	ctx := context.WithValue(r.Context(), paramsKey, p)
 	return r.WithContext(ctx)
@@ -50,23 +51,40 @@ func getParams(r *http.Request) (Params, bool) {
 	return p, ok
 }
 
+type requestContext struct {
+	params Params
+	query  *Query
+}
+
+var _ RequestContext = &requestContext{}
+
+// Params returns the request params.
+func (r *requestContext) Params() Params {
+	return r.params
+}
+
+// Query returns the query params for the request.
+func (r *requestContext) Query() *Query {
+	return r.query
+}
+
 var requestContextPool = &sync.Pool{
 	New: func() interface{} {
-		return &RequestContext{}
+		return &requestContext{}
 	},
 }
 
-// newRequestContext returns a new RequestContext from the pool.
-func newRequestContext(r *http.Request) *RequestContext {
-	rc := requestContextPool.Get().(*RequestContext)
-	rc.Params = nil
-	rc.Query = &Query{request: r}
+// newRequestContext returns a new RequestContext from a sync.Pool.
+func newRequestContext(r *http.Request) *requestContext {
+	rc := requestContextPool.Get().(*requestContext)
+	rc.params = nil
+	rc.query = &Query{request: r}
 
 	return rc
 }
 
-// returnContext ...
-func returnContext(rc *RequestContext) {
+// returnContext returns the RequestContext to the sync.Pool.
+func returnContext(rc *requestContext) {
 	requestContextPool.Put(rc)
 }
 
