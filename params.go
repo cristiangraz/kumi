@@ -16,7 +16,6 @@ func (p Params) GetDefault(name string, defaultValue string) string {
 	if v := p.Get(name); v != "" {
 		return v
 	}
-
 	return defaultValue
 }
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cristiangraz/kumi"
@@ -21,6 +22,10 @@ func TestHTTPRouter(t *testing.T) {
 	})
 }
 
+func TestHTTPRouter_NotFoundHandler(t *testing.T) {
+	testRouterNotFoundHandler(t, router.NewHTTPRouter())
+}
+
 func TestHTTPTreeMux(t *testing.T) {
 	testRouter(t, routerTest{
 		router: func() kumi.Router {
@@ -32,6 +37,10 @@ func TestHTTPTreeMux(t *testing.T) {
 	})
 }
 
+func TestHTTPTreeMux_NotFoundHandler(t *testing.T) {
+	testRouterNotFoundHandler(t, router.NewHTTPTreeMux())
+}
+
 func TestGorilla(t *testing.T) {
 	testRouter(t, routerTest{
 		router: func() kumi.Router {
@@ -41,6 +50,10 @@ func TestGorilla(t *testing.T) {
 		url:    "/users/gorilla",
 		params: kumi.Params{"name": "gorilla"},
 	})
+}
+
+func TestGorilla_NotFoundHandler(t *testing.T) {
+	testRouterNotFoundHandler(t, router.NewGorillaMuxRouter())
 }
 
 type routerTest struct {
@@ -60,7 +73,7 @@ func testRouter(t *testing.T, rt routerTest) {
 		var ran bool
 		h := func(w http.ResponseWriter, r *http.Request) {
 			ran = true
-			if !reflect.DeepEqual(kumi.Context(r).Params, rt.params) {
+			if !reflect.DeepEqual(kumi.Context(r).Params(), rt.params) {
 				t.Fatalf("unexpected params: %v", kumi.Context(r).Params)
 			}
 		}
@@ -94,74 +107,43 @@ func testRouter(t *testing.T, rt routerTest) {
 	}
 }
 
-//
-// func TestNotFoundHandlers(t *testing.T) {
-// 	routers := []struct {
-// 		name   string
-// 		router kumi.Router
-// 	}{
-// 		{
-// 			name:   "httprouter",
-// 			router: NewHTTPRouter(),
-// 		},
-// 		{
-// 			name:   "httptreemux",
-// 			router: NewHTTPTreeMux(),
-// 		},
-// 		{
-// 			name:   "gorilla",
-// 			router: NewGorillaMuxRouter(),
-// 		},
-// 	}
-//
-// 	nfh := func(c *kumi.Context) {
-// 		c.Header().Set("X-Not-Found-Handler", "True")
-// 		c.WriteHeader(http.StatusNotFound)
-// 	}
-//
-// 	mw := func(c *kumi.Context) {
-// 		c.Header().Set("X-Middleware-Ran", "True")
-// 		c.Next()
-// 	}
-//
-// 	for _, r := range routers {
-// 		k := kumi.New(r.router)
-//
-// 		// Set Global middleware to run
-// 		k.Use(mw)
-//
-// 		for _, inheritMiddleware := range []bool{true, false} {
-// 			// Set NotFoundHandler
-// 			k.NotFoundHandler(inheritMiddleware, nfh)
-//
-// 			rec := httptest.NewRecorder()
-// 			req, _ := http.NewRequest("GET", "/not-found-path", nil)
-//
-// 			c := k.NewContext(rec, req)
-// 			k.ServeHTTP(c, c.Request)
-// 			k.ReturnContext(c)
-//
-// 			if rec.Code != http.StatusNotFound {
-// 				t.Errorf("TestNotFoundHandlers (%s): Expected not found handler to return 404, given %d", r.name, rec.Code)
-// 			}
-//
-// 			// Ensure NFH ran
-// 			if rec.Header().Get("X-Not-Found-Handler") != "True" {
-// 				t.Errorf("TestNotFoundHandlers (%s): Expected X-Not-Found-Handler header", r.name)
-// 			}
-//
-// 			// Ensure global middleware ran on NFH when inheritMiddleware = true
-// 			expectedMw := ""
-// 			if inheritMiddleware {
-// 				expectedMw = "True"
-// 			}
-// 			if rec.Header().Get("X-Middleware-Ran") != expectedMw {
-// 				t.Errorf("TestNotFoundHandlers (%s): Expected X-Middleware-Ran header", r.name)
-// 			}
-// 		}
-// 	}
-// }
-//
+func testRouterNotFoundHandler(t *testing.T, router kumi.Router) {
+	a := tagMiddleware("a")
+	b := tagMiddleware("b")
+
+	var ran bool
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	}
+
+	k := kumi.New(router)
+	k.Use(a, b)
+	k.NotFoundHandler(fn)
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if !ran {
+		t.Fatal("handler did not run")
+	} else if w.Body.String() != "abBA" {
+		t.Fatalf("middleware stack did not run")
+	}
+}
+
+// A constructor for middleware that writes a "tag" to the ResponseWriter
+// for testing middleware ordering. Credit github.com/justinas/alice
+// This variation writes the tag before and after to verify middleware flow.
+func tagMiddleware(tag string) kumi.MiddlewareFn {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(strings.ToLower(tag)))
+			h.ServeHTTP(w, r)
+			w.Write([]byte(strings.ToUpper(tag)))
+		})
+	}
+}
+
 // func TestMethodNotAllowedHandlers(t *testing.T) {
 // 	routers := []struct {
 // 		name   string

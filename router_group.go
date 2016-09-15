@@ -1,14 +1,12 @@
 package kumi
 
 import (
-	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/justinas/alice"
 )
 
-// HTTPMethods provides an array of HTTP methods for looping over.
+// HTTPMethods is a list of HTTP methods kumi supports.
 var HTTPMethods = []string{GET, HEAD, POST, PUT, PATCH, OPTIONS, DELETE}
 
 // HTTP method constants.
@@ -24,9 +22,6 @@ const (
 
 // Handler is a generic HTTP handler.
 type Handler interface{}
-
-// MiddlewareFn is a type for handling upstream/downstream middleware.
-type MiddlewareFn func(http.Handler) http.Handler
 
 // Router defines an interface that allows for interchangeable routers.
 type Router interface {
@@ -44,24 +39,61 @@ type Router interface {
 // RouterGroup wraps the Router interface to provide route grouping by
 // a base pattern path and shared middleware.
 type RouterGroup interface {
-	Group(pattern string, middleware ...MiddlewareFn) RouterGroup
-	Use(middleware ...MiddlewareFn)
-	Get(pattern string, handlers ...Handler)
-	Post(pattern string, handlers ...Handler)
-	Put(pattern string, handlers ...Handler)
-	Patch(pattern string, handlers ...Handler)
-	Head(pattern string, handlers ...Handler)
-	Options(pattern string, handlers ...Handler)
-	Delete(pattern string, handlers ...Handler)
-	All(pattern string, handlers ...Handler)
+	// Group generates a new RouterGroup from the current RouterGroup that
+	// shares middleware. Any middleware appended to the
+	// group will be appended to it's parent's middleware.
+	Group(middleware ...func(http.Handler) http.Handler) RouterGroup
+
+	// GroupPath generates a new RouterGroup from the current RouterGroup that
+	// shares a base path and middleware. Any middleware appended to the
+	// group will be appended to it's parent's middleware.
+	GroupPath(pattern string, middleware ...func(http.Handler) http.Handler) RouterGroup
+
+	// Use applies middleware to all handlers defined after the Use call in
+	// this RouterGroup or it's descendants.
+	Use(middleware ...func(http.Handler) http.Handler)
+
+	// Defines a handler and optional middleware for a GET request at pattern.
+	Get(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for a POST request at pattern.
+	Post(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for a PUT request at pattern.
+	Put(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for a PATCH request at pattern.
+	Patch(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for a HEAD request at pattern.
+	// Kumi defines this automatically for all GET routes. If you want
+	// to define your own Head handler, define it before defining
+	// the Get handler for the same pattern.
+	Head(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for a OPTIONS request at pattern.
+	Options(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for a DELETE request at pattern.
+	Delete(pattern string, handler http.HandlerFunc)
+
+	// Defines a handler and optional middleware for all
+	// HTTP method requests at pattern.
+	All(pattern string, handler http.HandlerFunc)
+
+	// NotFoundHandler registers a handler to run when no matching route is found.
 	NotFoundHandler(http.HandlerFunc)
+
+	// MethodNotAllowedHandler registers a handler to run when a route is valid,
+	// but not for the requested HTTP method.
 	MethodNotAllowedHandler(http.HandlerFunc)
 
 	// SetCors sets a middleware to handle CORS headers.
 	// This ensures OPTIONS endpoints are automatically created if not defined,
 	// and that NotFound endpoints return CORS headers.
-	SetCors(MiddlewareFn)
+	SetCors(func(http.Handler) http.Handler)
 
+	// ServeHTTP implements the http.Handler interface.
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
@@ -70,14 +102,28 @@ type routerGroup struct {
 	pattern    string
 	router     Router
 	middleware alice.Chain
-	cors       MiddlewareFn
+	cors       func(http.Handler) http.Handler
 }
 
 var _ RouterGroup = &routerGroup{}
 
 // Group creates a sub-group of the router based on a route prefix. Any middleware
 // added to the group will be appended to the parent's middleware.
-func (g *routerGroup) Group(pattern string, middleware ...MiddlewareFn) RouterGroup {
+func (g *routerGroup) Group(middleware ...func(http.Handler) http.Handler) RouterGroup {
+	c := make([]alice.Constructor, len(middleware))
+	for i := range middleware {
+		c[i] = alice.Constructor(middleware[i])
+	}
+
+	return &routerGroup{
+		router:     g.router,
+		middleware: g.middleware.Append(c...),
+	}
+}
+
+// GroupPath creates a sub-group of the router based on a route prefix. Any middleware
+// added to the group will be appended to the parent's middleware.
+func (g *routerGroup) GroupPath(pattern string, middleware ...func(http.Handler) http.Handler) RouterGroup {
 	c := make([]alice.Constructor, len(middleware))
 	for i := range middleware {
 		c[i] = alice.Constructor(middleware[i])
@@ -91,7 +137,7 @@ func (g *routerGroup) Group(pattern string, middleware ...MiddlewareFn) RouterGr
 }
 
 // Use adds middleware to any routes used in this RouterGroup.
-func (g *routerGroup) Use(middleware ...MiddlewareFn) {
+func (g *routerGroup) Use(middleware ...func(http.Handler) http.Handler) {
 	c := make([]alice.Constructor, len(middleware))
 	for i := range middleware {
 		c[i] = alice.Constructor(middleware[i])
@@ -103,52 +149,52 @@ func (g *routerGroup) Use(middleware ...MiddlewareFn) {
 // Get defines an HTTP GET endpoint with one or more handlers.
 // It will also register a HEAD endpoint. Kumi will automatically
 // use a bodyless response writer.
-func (g *routerGroup) Get(pattern string, handlers ...Handler) {
-	g.handle(GET, pattern, handlers...)
+func (g *routerGroup) Get(pattern string, handler http.HandlerFunc) {
+	g.handle(GET, pattern, handler)
 }
 
 // Post defines an HTTP POST endpoint with one or more handlers.
-func (g *routerGroup) Post(pattern string, handlers ...Handler) {
-	g.handle(POST, pattern, handlers...)
+func (g *routerGroup) Post(pattern string, handler http.HandlerFunc) {
+	g.handle(POST, pattern, handler)
 }
 
 // Put defines an HTTP PUT endpoint with one or more handlers.
-func (g *routerGroup) Put(pattern string, handlers ...Handler) {
-	g.handle(PUT, pattern, handlers...)
+func (g *routerGroup) Put(pattern string, handler http.HandlerFunc) {
+	g.handle(PUT, pattern, handler)
 }
 
 // Patch defines an HTTP PATCH endpoint with one or more handlers.
-func (g *routerGroup) Patch(pattern string, handlers ...Handler) {
-	g.handle(PATCH, pattern, handlers...)
+func (g *routerGroup) Patch(pattern string, handler http.HandlerFunc) {
+	g.handle(PATCH, pattern, handler)
 }
 
 // Head defines an HTTP HEAD endpoint with one or more handlers.
 // Kumi defines this automatically for all GET routes. If you want
 // to define your own Head handler, define it before defining
 // the Get handler for the same pattern.
-func (g *routerGroup) Head(pattern string, handlers ...Handler) {
-	g.handle(HEAD, pattern, handlers...)
+func (g *routerGroup) Head(pattern string, handler http.HandlerFunc) {
+	g.handle(HEAD, pattern, handler)
 }
 
 // Options defines an HTTP OPTIONS endpoint with one or more handlers.
 // If you are using CORS, Kumi defines this automatically for all routes.
 // If you want to define your own Options handler, define it before defining
 // other methods against the same pattern.
-func (g *routerGroup) Options(pattern string, handlers ...Handler) {
-	g.handle(OPTIONS, pattern, handlers...)
+func (g *routerGroup) Options(pattern string, handler http.HandlerFunc) {
+	g.handle(OPTIONS, pattern, handler)
 }
 
 // Delete defines an HTTP DELETE endpoint with one or more handlers.
-func (g *routerGroup) Delete(pattern string, handlers ...Handler) {
-	g.handle(DELETE, pattern, handlers...)
+func (g *routerGroup) Delete(pattern string, handler http.HandlerFunc) {
+	g.handle(DELETE, pattern, handler)
 }
 
 // All is a convenience function that adds a handler to
 // GET/HEAD/POST/PUT/PATCH/DELETE methods.
 // Note HEAD/OPTIONS are set in the handle method automatically.
-func (g *routerGroup) All(pattern string, handlers ...Handler) {
+func (g *routerGroup) All(pattern string, handler http.HandlerFunc) {
 	for _, method := range HTTPMethods {
-		g.handle(method, pattern, handlers...)
+		g.handle(method, pattern, handler)
 	}
 }
 
@@ -174,11 +220,11 @@ func (g *routerGroup) MethodNotAllowedHandler(handler http.HandlerFunc) {
 	g.router.MethodNotAllowedHandler(g.middleware.ThenFunc(handler))
 }
 
-// SetCors sets the MiddlewareFn that handles CORS headers.
+// SetCors sets the func(http.Handler) http.Handler that handles CORS headers.
 // This is registered independendently so kumi can handle some CORS
 // conveniences for the application (creating OPTIONS routes and running
 // CORS on 404 requests).
-func (g *routerGroup) SetCors(m MiddlewareFn) {
+func (g *routerGroup) SetCors(m func(http.Handler) http.Handler) {
 	g.cors = m
 }
 
@@ -189,13 +235,12 @@ func (g *routerGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handle consolidates all of the middleware into a route that satisfies the
 // router.Handle interface
-func (g *routerGroup) handle(method, pattern string, handlers ...Handler) {
-	middleware, handler, err := combine(handlers...)
-	if err != nil {
-		panic(err)
+func (g *routerGroup) handle(method, pattern string, handler http.HandlerFunc) {
+	if handler == nil {
+		panic("cannot send a nil http.HandlerFunc")
 	}
 
-	h := g.middleware.Append(middleware...).ThenFunc(handler)
+	h := g.middleware.ThenFunc(handler)
 	pattern = g.pattern + pattern
 
 	g.router.Handle(method, pattern, h)
@@ -211,49 +256,10 @@ func (g *routerGroup) handle(method, pattern string, handlers ...Handler) {
 	}
 }
 
-// combine takes one or more handlers and combines them into an http.Handler.
-// combine expects at least one handler. The last handler should always be http.HandlerFunc.
-// One or more middleware can be combined before the final handler.
-func combine(handlers ...Handler) ([]alice.Constructor, http.HandlerFunc, error) {
-	if len(handlers) == 0 {
-		return nil, nil, errors.New("one or more handlers are required")
-	}
-
-	handler := handlers[len(handlers)-1]
-	middleware := handlers[:len(handlers)-1]
-
-	var h http.HandlerFunc
-	switch handler.(type) {
-	case http.HandlerFunc:
-		h = handler.(http.HandlerFunc)
-	case func(http.ResponseWriter, *http.Request):
-		h = http.HandlerFunc(handler.(func(http.ResponseWriter, *http.Request)))
-	default:
-		return nil, nil, fmt.Errorf("invalid handler: %T", handler)
-	}
-
-	if len(handlers) == 1 {
-		return nil, h, nil
-	}
-
-	c := make([]alice.Constructor, len(middleware))
-	for i := range middleware {
-		switch mw := middleware[i].(type) {
-		case func(http.Handler) http.Handler:
-			c[i] = mw
-		case MiddlewareFn:
-			c[i] = alice.Constructor(mw)
-		default:
-			panic(fmt.Sprintf("invalid middleware: %T", mw))
-		}
-	}
-	return c, h, nil
-}
-
-// MiddlewareFunc wraps an http.HandlerFunc so it implements MiddlewareFn.
+// MiddlewareFunc wraps an http.HandlerFunc so it implements func(http.Handler) http.Handler.
 // Do not use this if you are wrapping ResponseWriter or using r.WithContext -
 // both values need to be passed to fn.ServeHTTP in order to be accessible downstream.
-func MiddlewareFunc(fn http.HandlerFunc) MiddlewareFn {
+func MiddlewareFunc(fn http.HandlerFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fn(w, r)
