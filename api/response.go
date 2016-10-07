@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Response is the response format for responding to all API requests
+// Response is the response format for responding to API requests.
 type Response struct {
 	XMLName xml.Name `xml:"response" json:"-"`
 
@@ -31,15 +31,31 @@ type Response struct {
 	Pagination *Paging `json:"paging,omitempty" xml:"paging,omitempty"`
 }
 
-// ErrorResponse ...
-type ErrorResponse struct {
-	*Response
-}
+var _ Sender = &Response{}
 
 // Sender interface is used by kumi to send an API response to a
 // http.ResponseWriter.
 type Sender interface {
 	Send(http.ResponseWriter)
+}
+
+// Success creates a new successful response.
+func Success(result interface{}) *Response {
+	return &Response{
+		Success: true,
+		Status:  http.StatusOK,
+		Result:  result,
+	}
+}
+
+// Send passes the response off to the formatter and writes it.
+func (r *Response) Send(w http.ResponseWriter) {
+	Formatter(r, w)
+}
+
+// SendFormat sends the response using a given formatter
+func (r *Response) SendFormat(w http.ResponseWriter, f FormatterFn) {
+	f(r, w)
 }
 
 // Paging holds pagination information for the response
@@ -58,19 +74,19 @@ type PagingOrder struct {
 	Direction string   `json:"direction,omitempty" xml:"direction"`
 }
 
-// Compile-time checks
-var _ Sender = &Response{}
+// Paging adds pagination data to the response.
+func (r *Response) Paging(p Paging) *Response {
+	r.Pagination = &p
+	return r
+}
+
+// ErrorResponse is a response that holds one or more Error structs.
+type ErrorResponse struct {
+	*Response
+}
+
 var _ Sender = &ErrorResponse{}
 var _ error = &ErrorResponse{}
-
-// Success creates a new successful response.
-func Success(result interface{}) *Response {
-	return &Response{
-		Success: true,
-		Status:  http.StatusOK,
-		Result:  result,
-	}
-}
 
 // Failure returns an error API response.
 // statusCode should be >= 400 and <= 599
@@ -80,12 +96,14 @@ func Failure(statusCode int, errors ...Error) *ErrorResponse {
 		code = "unprocessable_entity"
 	}
 
-	return &ErrorResponse{Response: &Response{
-		Success: false,
-		Status:  statusCode,
-		Code:    code,
-		Errors:  errors,
-	}}
+	return &ErrorResponse{
+		Response: &Response{
+			Success: false,
+			Status:  statusCode,
+			Code:    code,
+			Errors:  errors,
+		},
+	}
 }
 
 // Error response implements the error interface by sending the info in
@@ -99,22 +117,5 @@ func (r ErrorResponse) Error() string {
 	if e.Field == "" {
 		return e.Message
 	}
-
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
-}
-
-// Paging adds pagination data to the response.
-func (r *Response) Paging(p Paging) *Response {
-	r.Pagination = &p
-	return r
-}
-
-// Send passes the response off to the formatter and writes it.
-func (r *Response) Send(w http.ResponseWriter) {
-	Formatter(r, w)
-}
-
-// SendFormat sends the response using a given formatter
-func (r *Response) SendFormat(w http.ResponseWriter, f FormatterFn) {
-	f(r, w)
 }

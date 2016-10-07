@@ -87,11 +87,3 @@ func newRequestContext(r *http.Request) *requestContext {
 func returnContext(rc *requestContext) {
 	requestContextPool.Put(rc)
 }
-
-// Cache returns cache.Headers for setting Cache-Control headers.
-// func (c *RequestContext) Cache() *cache.Headers {
-// 	if c.cache == nil {
-// 		c.cache = cache.New()
-// 	}
-// 	return c.cache
-// }

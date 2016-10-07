@@ -15,6 +15,11 @@ type Query struct {
 
 var csvIDs = regexp.MustCompile(`^[0-9]+(?:,[0-9]+)*$`)
 
+// NewQuery creates a new Query from a http.Request.
+func NewQuery(r *http.Request) *Query {
+	return &Query{request: r}
+}
+
 // All returns the url.Values from the request's query string.
 func (q Query) All() url.Values {
 	return q.request.URL.Query()
@@ -43,7 +48,7 @@ func (q Query) GetInt(name string) (int, error) {
 // It accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
 // Any other value returns an error.
 func (q Query) GetBool(name string) (bool, error) {
-	return strconv.ParseBool(q.Get("name"))
+	return strconv.ParseBool(q.Get(name))
 }
 
 // Sort returns the query string sorted with empty values removed.

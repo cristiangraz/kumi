@@ -1,10 +1,9 @@
 package validator
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"regexp"
 	"sync"
@@ -27,7 +26,7 @@ type Validator struct {
 
 // SecondaryValidator allows for custom validation logic if the document
 // is invalid. See NewSecondaryValidator function for more details.
-type SecondaryValidator func(dst interface{}, body string, r *http.Request) (result *gojsonschema.Result, sender api.Sender)
+type SecondaryValidator func(dst interface{}, document *JSONLoader) (result *gojsonschema.Result, sender api.Sender)
 
 // Match json.UnmarshalTypeError
 var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into Go value of type`)
@@ -36,9 +35,9 @@ var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into 
 // the limit set in the Validator.
 func New(schema gojsonschema.JSONLoader, options *Options, limit int64) *Validator {
 	if options == nil {
-		log.Fatal("validator: options cannot be nil")
+		panic("validator: options cannot be nil")
 	} else if err := options.Valid(); err != nil {
-		log.Fatalf("validator: invalid options: %s", err)
+		panic(fmt.Sprintf("validator: invalid options: %s", err))
 	} else if options.Swapper == nil {
 		options.Swapper = Swap
 	}
@@ -64,6 +63,9 @@ func NewSecondary(schema gojsonschema.JSONLoader, options *Options, limit int64,
 // Valid validates a request against a json schema and handles error responses.
 // If the response is successful, dst will be populated.
 func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
+	if dst == nil {
+		panic("dst required")
+	}
 	defer r.Body.Close()
 
 	limit := v.Options.Limit
@@ -76,9 +78,9 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 	limitReader.N = limit + 1 // extend by 1 byte, if N bytes are left to read we've hit max
 	defer limitReaderPool.Put(limitReader)
 
-	var buf bytes.Buffer
-	tee := io.TeeReader(limitReader, &buf)
-	if err := json.NewDecoder(tee).Decode(&dst); err != nil {
+	decoder := json.NewDecoder(limitReader)
+	decoder.UseNumber()
+	if err := decoder.Decode(&dst); err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
 			return v.Options.InvalidJSON
@@ -105,37 +107,35 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 		}
 	}
 
-	body := buf.String()
+	document := loaderPool.Get().(*JSONLoader)
+	document.dst = dst
+	document.i = nil
+	defer loaderPool.Put(document)
 
-	document := gojsonschema.NewStringLoader(body)
 	result, err := gojsonschema.Validate(v.Schema, document)
 	if err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
 			return v.Options.InvalidJSON
 		default:
-			// Most likely an error in the schema.
+			// An error with the schema
 			return v.Options.BadRequest
 		}
-	}
-
-	if result.Valid() {
+	} else if result.Valid() {
 		return nil
 	}
 
+	// Run through secondary validator
 	if v.secondary != nil {
-		secondaryResult, sender := v.secondary(dst, body, r)
+		secondaryResult, sender := v.secondary(dst, document)
 		if sender != nil {
 			return sender
-		}
-
-		if secondaryResult != nil {
+		} else if secondaryResult != nil {
 			result = secondaryResult
 		}
 	}
 
 	e := Swap(result.Errors(), v.Options.Rules)
-
 	statusCode := http.StatusBadRequest
 	if v.Options.ErrorStatus > 0 {
 		statusCode = v.Options.ErrorStatus
