@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cristiangraz/kumi/api"
@@ -54,6 +55,46 @@ var (
 	}
 )
 
+func BenchmarkValidator(b *testing.B) {
+	schema := gojsonschema.NewStringLoader(`{
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "city": {
+                "type": "string",
+                "enum": ["foo", "bar"]
+            }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+    }`)
+	payload := `{"name": "Lilly", "city": "baz"}`
+
+	type schemaDest struct {
+		Name string `json:"name"`
+		City string `json:"string"`
+	}
+
+	limit := int64(1<<20) + 1
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		v := New(schema, validatorOpts, limit)
+		r, err := http.NewRequest("POST", "/", strings.NewReader(payload))
+		if err != nil {
+			b.Fatalf("error creating request: %v", err)
+		}
+		r.Header.Set("Content-Type", "application/json")
+
+		var dst schemaDest
+		v.Valid(&dst, r)
+	}
+}
+
 func TestValidator(t *testing.T) {
 	schema := `{
         "type": "object",
@@ -90,6 +131,7 @@ func TestValidator(t *testing.T) {
 		{
 			schema:       schema,
 			payload:      []byte(`{"name": "Lilly", "city": "baz"}`),
+			dst:          schemaDest{},
 			expectStatus: 422,
 			expect: []api.Error{
 				api.Error{
@@ -100,7 +142,7 @@ func TestValidator(t *testing.T) {
 			},
 		},
 		{
-			// Set tiny limit of 1 byte, exceed it
+			// Set limit of 1 byte, exceed it
 			schema:       schema,
 			payload:      []byte(`{"name": "Lilly", "city": "foo"}`),
 			limit:        1,
@@ -109,6 +151,32 @@ func TestValidator(t *testing.T) {
 				api.Error{
 					Type:    RequestBodyExceededError.Type,
 					Message: RequestBodyExceededError.Message,
+				},
+			},
+		},
+		{
+			// Set limit of 1 byte, exceed it before JSON is validated
+			schema:       schema,
+			payload:      []byte(`{ `),
+			limit:        1,
+			expectStatus: http.StatusBadRequest,
+			expect: []api.Error{
+				api.Error{
+					Type:    RequestBodyExceededError.Type,
+					Message: RequestBodyExceededError.Message,
+				},
+			},
+		},
+		{
+			// Set limit of 1 byte, match the limit exactly and expect a JSON error
+			schema:       schema,
+			payload:      []byte(`{`),
+			limit:        1,
+			expectStatus: http.StatusBadRequest,
+			expect: []api.Error{
+				api.Error{
+					Type:    InvalidJSONError.Type,
+					Message: InvalidJSONError.Message,
 				},
 			},
 		},
@@ -160,24 +228,22 @@ func TestValidator(t *testing.T) {
 		v := New(gojsonschema.NewStringLoader(tt.schema), validatorOpts, tt.limit)
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
-			t.Errorf("TestValidator (%d): Error creating request", i)
+			t.Fatalf("TestValidator (%d): Error creating request", i)
 		}
 		r.Header.Set("Content-Type", "application/json")
 
 		sender := v.Valid(&tt.dst, r)
 		if sender != nil && len(tt.expect) == 0 {
-			t.Errorf("TestValidator (%d): Expected no errors, one or more given", i)
-		}
-
-		if sender == nil && len(tt.expect) > 0 {
-			t.Errorf("TestValidator (%d): Expected errors. None given", i)
+			t.Fatalf("TestValidator (%d): Expected no errors, one or more given", i)
+		} else if sender == nil && len(tt.expect) > 0 {
+			t.Fatalf("TestValidator (%d): Expected errors. None given", i)
 		}
 
 		if tt.expectStatus > 0 {
 			w := httptest.NewRecorder()
 			sender.Send(w)
 			if w.Code != tt.expectStatus {
-				t.Errorf("TestValidator (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+				t.Fatalf("TestValidator (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
 			}
 		}
 
@@ -191,7 +257,7 @@ func TestValidator(t *testing.T) {
 		sender.Send(given)
 
 		if !reflect.DeepEqual(expect, given) {
-			t.Errorf("TestValidator (%d): Expected %v, given %v", i, expect, given)
+			t.Fatalf("TestValidator (%d): Expected %v, given %v", i, expect, given)
 		}
 	}
 }
@@ -352,7 +418,7 @@ func TestSecondaryValidator(t *testing.T) {
 	}
 
 	// secondary validator
-	secondary := func(dst interface{}, body string, r *http.Request) (result *gojsonschema.Result, sender api.Sender) {
+	secondary := func(dst interface{}, document *JSONLoader) (result *gojsonschema.Result, sender api.Sender) {
 		data, ok := dst.(*dest)
 		if !ok {
 			return nil, nil
@@ -363,8 +429,6 @@ func TestSecondaryValidator(t *testing.T) {
 				Field: "type",
 			})
 		}
-
-		document := gojsonschema.NewStringLoader(body)
 
 		var err error
 		switch data.Type {
@@ -381,7 +445,6 @@ func TestSecondaryValidator(t *testing.T) {
 		if err != nil {
 			return nil, nil
 		}
-
 		return result, nil
 	}
 
@@ -391,17 +454,15 @@ func TestSecondaryValidator(t *testing.T) {
 		v := New(gojsonschema.NewStringLoader(tt.schema), validatorOpts, 0)
 		r, err := http.NewRequest("POST", "/", bytes.NewBuffer(tt.payload))
 		if err != nil {
-			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Error creating request", i)
+			t.Fatalf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Error creating request", i)
 		}
 		r.Header.Set("Content-Type", "application/json")
 
 		sender := v.Valid(&dst, r)
 		if sender != nil && len(tt.expect) == 0 {
-			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected no errors, one given", i)
-		}
-
-		if sender == nil && len(tt.expect) > 0 {
-			t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected errors. None given", i)
+			t.Fatalf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected no errors, one given", i)
+		} else if sender == nil && len(tt.expect) > 0 {
+			t.Fatalf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected errors. None given", i)
 		}
 
 		if tt.expectStatus > 0 {
@@ -409,7 +470,7 @@ func TestSecondaryValidator(t *testing.T) {
 			sender.Send(w)
 
 			if w.Code != tt.expectStatus {
-				t.Errorf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
+				t.Fatalf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected status code of %d, given %d", i, tt.expectStatus, w.Code)
 			}
 		}
 

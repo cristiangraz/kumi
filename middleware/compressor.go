@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/cristiangraz/kumi"
 )
 
 type (
@@ -72,56 +70,54 @@ var Compressor = CompressorLevel(gzip.DefaultCompression)
 
 // CompressorLevel returns gzip compressable middleware using a given
 // gzip level.
-func CompressorLevel(level int) kumi.HandlerFunc {
+func CompressorLevel(level int) func(http.Handler) http.Handler {
 	if level != gzip.NoCompression && level != gzip.BestSpeed && level != gzip.BestCompression && level != gzip.DefaultCompression {
 		panic("Invalid compressor level.")
 	}
 
-	return func(c *kumi.Context) {
-		// check client's accepted encodings
-		if encs := acceptedEncodings(c.Request); len(encs) == 0 {
-			c.WriteHeader(http.StatusNotAcceptable)
-			return
-		} else if encs[0] != encGzip {
-			c.Next()
-			return
-		}
-
-		// Don't double-encode
-		if strings.Contains(c.Header().Get("Content-Encoding"), "gzip") {
-			c.Next()
-			return
-		}
-
-		// If there is a file extension and it doesn't match compressible
-		// extensions, skip
-		if exts := rxExtension.FindStringSubmatch(c.Request.URL.Path); len(exts) == 0 {
-			c.Next()
-			return
-		} else if len(exts) == 1 {
-			ext := exts[0]
-			if _, ok := CompressibleExtensions[ext]; !ok {
-				c.Next()
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			// check client's accepted encodings
+			if encs := acceptedEncodings(r); len(encs) == 0 {
+				w.WriteHeader(http.StatusNotAcceptable)
+				return
+			} else if encs[0] != encGzip {
+				next.ServeHTTP(w, r)
+				return
+			} else if strings.Contains(w.Header().Get("Content-Encoding"), "gzip") { // Don't double-encode
+				next.ServeHTTP(w, r)
 				return
 			}
-		}
 
-		// cannot accept Range requests for possibly gzipped responses
-		c.Request.Header.Del("Range")
+			// If there is a file extension and it doesn't match compressible
+			// extensions, skip
+			if exts := rxExtension.FindStringSubmatch(r.URL.Path); len(exts) == 0 {
+				next.ServeHTTP(w, r)
+				return
+			} else if len(exts) == 1 {
+				ext := exts[0]
+				if _, ok := CompressibleExtensions[ext]; !ok {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 
-		c.Header().Set("Vary", "Accept-Encoding")
-		setCompressionHeaders(c.Header())
+			// cannot accept Range requests for possibly gzipped responses
+			r.Header.Del("Range")
 
-		gzw := gzipWriterPools[level].Get().(*gzip.Writer)
-		gzw.Reset(c.ResponseWriter)
-		defer func() {
+			w.Header().Set("Vary", "Accept-Encoding")
+			setCompressionHeaders(w.Header())
+
+			gzw := gzipWriterPools[level].Get().(*gzip.Writer)
+			gzw.Reset(w)
+
+			w = &gzipResponseWriter{w, gzw}
+			next.ServeHTTP(w, r)
+
 			gzw.Close()
 			gzipWriterPools[level].Put(gzw)
-		}()
-
-		c.ResponseWriter = gzipResponseWriter{c.ResponseWriter, gzw}
-
-		c.Next()
+		}
+		return http.HandlerFunc(fn)
 	}
 }
 

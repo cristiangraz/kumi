@@ -72,7 +72,6 @@ func Swap(errors []gojsonschema.ResultError, rules Rules) (e []api.Error) {
 					Type:    m.ErrorType,
 					Message: m.Message,
 				})
-
 				break
 			}
 		}

@@ -36,11 +36,10 @@ func (e Error) Error() string {
 	if e.Field == "" {
 		return e.Message
 	}
-
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
-// Send sends the Error with no field.
+// Send sends the Error with no field. Implements the Sender interface.
 func (e Error) Send(w http.ResponseWriter) {
 	statusCode := e.StatusCode
 	if statusCode == 0 {
@@ -65,7 +64,6 @@ func (e Error) With(input SendInput) *ErrorResponse {
 	if input.Field != "" {
 		e.Field = input.Field
 	}
-
 	if input.Message != "" {
 		e.Message = input.Message
 	}

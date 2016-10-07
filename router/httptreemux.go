@@ -11,91 +11,61 @@ import (
 // HTTPTreeMux wraps the httptreemux.TreeMux router and meets the
 // kumi.Router interface.
 type HTTPTreeMux struct {
-	Router *httptreemux.TreeMux
-	engine *kumi.Engine
-	routes map[string][]string
+	router *httptreemux.TreeMux
+	store  *Store
 }
+
+var _ kumi.Router = &HTTPTreeMux{}
 
 // NewHTTPTreeMux creates a new instance of a default httptreemux router.
 // If you need to set custom options, you should instantiate HTTPTreeMux
 // yourself.
 func NewHTTPTreeMux() *HTTPTreeMux {
-	r := map[string][]string{}
-	for _, m := range kumi.HTTPMethods {
-		r[m] = []string{}
-	}
-
 	return &HTTPTreeMux{
-		Router: httptreemux.New(),
-		routes: r,
+		router: httptreemux.New(),
+		store:  &Store{},
 	}
 }
 
 // Handle ...
-func (router *HTTPTreeMux) Handle(method string, pattern string, h ...kumi.HandlerFunc) {
-	router.Router.Handle(method, pattern, func(rw http.ResponseWriter, r *http.Request, p map[string]string) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
+func (router *HTTPTreeMux) Handle(method string, pattern string, next http.Handler) {
+	router.router.Handle(method, pattern, func(w http.ResponseWriter, r *http.Request, p map[string]string) {
 		if len(p) > 0 {
-			c.Params = kumi.Params(p)
+			r = kumi.SetParams(r, p)
 		}
-
-		c.Next()
+		next.ServeHTTP(w, r)
 	})
-
-	router.routes[method] = append(router.routes[method], pattern)
-}
-
-// SetEngine sets the kumi engine on the router.
-func (router *HTTPTreeMux) SetEngine(e *kumi.Engine) {
-	router.engine = e
-}
-
-// Engine retrieves the kumi engine.
-func (router *HTTPTreeMux) Engine() *kumi.Engine {
-	return router.engine
+	router.store.Save(method, pattern)
 }
 
 // ServeHTTP ...
-func (router *HTTPTreeMux) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	router.Router.ServeHTTP(rw, r)
+func (router *HTTPTreeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	router.router.ServeHTTP(w, r)
 }
 
 // NotFoundHandler ...
-func (router *HTTPTreeMux) NotFoundHandler(h ...kumi.HandlerFunc) {
-	router.Router.NotFoundHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
-		c.Next()
-	})
+func (router *HTTPTreeMux) NotFoundHandler(h http.Handler) {
+	router.router.NotFoundHandler = func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+	}
 }
 
 // MethodNotAllowedHandler ...
-func (router *HTTPTreeMux) MethodNotAllowedHandler(h ...kumi.HandlerFunc) {
-	router.Router.MethodNotAllowedHandler = func(rw http.ResponseWriter, r *http.Request, methods map[string]httptreemux.HandlerFunc) {
-		c := router.engine.NewContext(rw, r, h...)
-		defer router.engine.ReturnContext(c)
-
-		var allow []string
+func (router *HTTPTreeMux) MethodNotAllowedHandler(h http.Handler) {
+	router.router.MethodNotAllowedHandler = func(w http.ResponseWriter, r *http.Request, methods map[string]httptreemux.HandlerFunc) {
+		allow := make([]string, len(methods))
+		var i int
 		for m := range methods {
-			allow = append(allow, m)
+			allow[i] = m
+			i++
 		}
+		w.Header().Set("Allow", strings.Join(allow, ", "))
 
-		c.Header().Set("Allow", strings.Join(allow, ", "))
-
-		c.Next()
+		h.ServeHTTP(w, r)
 	}
 }
 
 // HasRoute ...
 func (router *HTTPTreeMux) HasRoute(method string, pattern string) bool {
-	for _, p := range router.routes[method] {
-		if p == pattern {
-			return true
-		}
-	}
-
-	return false
+	return router.store.HasRoute(method, pattern)
 }

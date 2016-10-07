@@ -1,50 +1,41 @@
-package kumi
+package kumi_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/cristiangraz/kumi"
+)
 
 func TestParams(t *testing.T) {
-	p := Params{
+	p := kumi.Params{
 		"id":      "10",
-		"type":    "articles",
+		"content": "articles",
 		"channel": "tech",
 	}
 
-	suite := map[string]string{
-		"id":      "10",
-		"type":    "articles",
-		"channel": "tech",
-		"foo":     "",
+	if id := p.Get("id"); id != "10" {
+		t.Fatalf("unexpected id: %s", id)
+	} else if content := p.Get("content"); content != "articles" {
+		t.Fatalf("unexpected content: %s", content)
+	} else if channel := p.Get("channel"); channel != "tech" {
+		t.Fatalf("unexpected channel: %s", channel)
+	} else if foo := p.Get("foo"); foo != "" {
+		t.Fatalf("unexpected foo: %s", foo)
 	}
 
-	for name, expected := range suite {
-		if given := p.Get(name); given != expected {
-			t.Errorf("TestParams: Expected Get of %s would equal %s, given %s", name, expected, given)
-		}
+	if id := p.GetDefault("id", "20"); id != "10" {
+		t.Fatalf("unexpected id: %s", id)
+	} else if fooBar := p.GetDefault("foo", "bar"); fooBar != "bar" {
+		t.Fatalf("unexpected fooBar: %s", fooBar)
 	}
 
-	if given := p.GetDefault("id", "20"); given != "10" {
-		t.Errorf(`TestParams: Expected GetDefault of id would equal 10, given %s`, given)
+	if i, err := p.GetInt("id"); err != nil {
+		t.Fatalf("error casting to int: %v", err)
+	} else if i != 10 {
+		t.Fatalf("unexpected id: %d", i)
 	}
 
-	if given := p.GetDefault("foo", "bar"); given != "bar" {
-		t.Errorf(`TestParams: Expected GetDefault of bar would return default value of "bar", given %s`, given)
-	}
-
-	if given := p.GetDefault("bla", "abc"); given != "abc" {
-		t.Errorf(`TestParams: Expected GetDefault of bar would return default value of "abc", given %s`, given)
-	}
-
-	i, err := p.GetInt("id")
-	if err != nil {
-		t.Errorf("TestParams: Expected GetInt of ID would not return an error. Err: %s", err)
-	}
-
-	if i != 10 {
-		t.Errorf("TestParams: Expected GetInt of id would return %d, given %d", 10, i)
-	}
-
-	_, err = p.GetInt("channel")
-	if err == nil {
-		t.Error("TestParams: Expected GetInt of channel would return error. None given.")
+	if _, err := p.GetInt("channel"); err == nil {
+		t.Fatal("expected error casting string to int, none given")
 	}
 }

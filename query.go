@@ -1,13 +1,11 @@
 package kumi
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 // Query provides useful methods to operate on the request's query string values.
@@ -16,6 +14,11 @@ type Query struct {
 }
 
 var csvIDs = regexp.MustCompile(`^[0-9]+(?:,[0-9]+)*$`)
+
+// NewQuery creates a new Query from a http.Request.
+func NewQuery(r *http.Request) *Query {
+	return &Query{request: r}
+}
 
 // All returns the url.Values from the request's query string.
 func (q Query) All() url.Values {
@@ -41,46 +44,9 @@ func (q Query) GetInt(name string) (int, error) {
 	return strconv.Atoi(q.Get(name))
 }
 
-// GetIntSlice returns a slice of ints from a comma-separated list
-// of values.
-func (q Query) GetIntSlice(name string) ([]int, error) {
-	raw := q.Get(name)
-	if raw == "" {
-		return nil, errors.New("not found")
-	}
-
-	if !csvIDs.MatchString(raw) {
-		return nil, errors.New("invalid csv")
-	}
-
-	split := strings.Split(raw, ",")
-	slice := make([]int, len(split))
-	for i := range split {
-		n, _ := strconv.Atoi(split[i])
-		slice[i] = n
-	}
-	return slice, nil
-}
-
-// GetSlice returns a slice of strings from a comma-separated list
-// of values.
-func (q Query) GetSlice(name string) ([]string, error) {
-	raw := q.Get(name)
-	if raw == "" {
-		return nil, errors.New("not found")
-	} else if strings.Contains(raw, " ") {
-		return nil, errors.New("invalid csv")
-	}
-
-	split := strings.Split(raw, ",")
-	slice := make([]string, len(split))
-	for i := range split {
-		slice[i] = split[i]
-	}
-	return slice, nil
-}
-
-// GetBool attempts to convert a query string value to a boolean.
+// GetBool returns the boolean value represented by the string.
+// It accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
+// Any other value returns an error.
 func (q Query) GetBool(name string) (bool, error) {
 	return strconv.ParseBool(q.Get(name))
 }

@@ -4,23 +4,25 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cristiangraz/kumi"
 	"golang.org/x/net/context"
 )
 
 // Timeout cancels context.Context after a given duration.
-func Timeout(timeout time.Duration) kumi.HandlerFunc {
-	return func(c *kumi.Context) {
-		var cancel context.CancelFunc
-		c.Context, cancel = context.WithTimeout(c.Context, timeout)
+func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 
-		defer func() {
-			cancel()
-			if c.Context.Err() == context.DeadlineExceeded {
-				c.WriteHeader(http.StatusGatewayTimeout)
-			}
-		}()
+			defer func() {
+				cancel()
+				if ctx.Err() == context.DeadlineExceeded {
+					w.WriteHeader(http.StatusGatewayTimeout)
+				}
+			}()
 
-		c.Next()
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+		}
+		return http.HandlerFunc(fn)
 	}
 }

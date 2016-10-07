@@ -4,89 +4,24 @@ import (
 	"crypto/tls"
 	"net/http"
 	"strings"
-	"sync"
 
-	"github.com/cristiangraz/kumi/cache"
 	"github.com/facebookgo/grace/gracehttp"
-	"golang.org/x/net/context"
+	"github.com/justinas/alice"
 )
 
-// Engine is the glue that holds everything together.
+// Engine embeds RouterGroup and provides methods to start the server.
 type Engine struct {
 	RouterGroup
-
-	// DefaultContext is the starting context used for each request.
-	DefaultContext context.Context
-
-	pool sync.Pool
-
-	// Global CORS settings. This is used only if you attach the
-	// Engine.CorsOptions handler to your handler chain of
-	// each route or route group.
-	// Additionally you can provide route-specific overrides
-	// for any of the settings in CorsOptions.
-	cors *CorsOptions
-}
-
-// BodylessResponseWriter wraps http.ResponseWriter, discarding
-// anything written to the body.
-type BodylessResponseWriter struct {
-	http.ResponseWriter
 }
 
 // New creates a new Engine using the given Router.
 func New(r Router) *Engine {
-	e := &Engine{
-		DefaultContext: context.Background(),
-		pool: sync.Pool{
-			New: func() interface{} {
-				return newContext(nil, nil, nil)
-			},
+	return &Engine{
+		RouterGroup: &routerGroup{
+			router:     r,
+			middleware: alice.New(setup),
 		},
 	}
-
-	r.SetEngine(e)
-	e.RouterGroup.router = r
-
-	return e
-}
-
-// NewContext retrieves a context from the pool and sets it for the request.
-func (e *Engine) NewContext(rw http.ResponseWriter, r *http.Request, handlers ...HandlerFunc) *Context {
-	if r.Method == HEAD {
-		rw = &BodylessResponseWriter{rw}
-	}
-
-	c := e.pool.Get().(*Context)
-	c.reset(rw, r, handlers...)
-
-	// Set the starting context.Context from the engine's default
-	c.Context = e.DefaultContext
-
-	// Set URL host and scheme
-	r.Host = strings.ToLower(r.Host)
-	r.URL.Host = r.Host
-	r.URL.Scheme = "http"
-	if r.TLS != nil {
-		r.URL.Scheme = "https"
-	}
-
-	return c
-}
-
-// ReturnContext returns a context back to the pool. Before the context is
-// returned deferred functions are run. This is automatically done
-// by each of the router implementations and should only be used if you are
-// integrating a route with Kumi.
-func (e *Engine) ReturnContext(c *Context) {
-	// Cache headers need to be released back into the pool.
-	cache.Release(c.CacheHeaders)
-	e.pool.Put(c)
-}
-
-// ServeHTTP is the ServeHTTP call for the router. Useful for testing.
-func (e *Engine) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	e.router.ServeHTTP(rw, r)
 }
 
 // Run starts kumi.
@@ -111,10 +46,6 @@ func (e *Engine) Serve(servers ...*http.Server) error {
 	return gracehttp.Serve(servers...)
 }
 
-func (brw BodylessResponseWriter) Write(b []byte) (int, error) {
-	return len(b), nil
-}
-
 // prep breaks out all of the steps of Serve except actually calling
 // gracehttp.Serve so we can test.
 func (e *Engine) prep(servers ...*http.Server) {
@@ -127,6 +58,40 @@ func (e *Engine) prep(servers ...*http.Server) {
 	}
 
 	if !hasHandler {
-		http.Handle("/", e.router)
+		http.Handle("/", e.RouterGroup)
 	}
+}
+
+// setup is internal kumi middleware. It wraps http.ResponseWriter with
+// ResponseWriter, or with BodylessResponseWriter for HEAD requests.
+// It normalizes the Host and sets the URL scheme. In addition, this
+// sets the RequestContext.
+func setup(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case HEAD:
+			w = &BodylessResponseWriter{w}
+		default:
+			rw := newWriter(w)
+			w = rw
+			defer writerPool.Put(rw)
+		}
+
+		r.Host = strings.ToLower(r.Host)
+		r.URL.Host = r.Host
+		if r.TLS != nil {
+			r.URL.Scheme = "https"
+		} else {
+			r.URL.Scheme = "http"
+		}
+
+		// Set the kumi request context
+		rc := newRequestContext(r)
+		if p, ok := getParams(r); ok {
+			rc.params = p
+		}
+		next.ServeHTTP(w, SetRequestContext(r, rc))
+
+		returnContext(rc)
+	})
 }
