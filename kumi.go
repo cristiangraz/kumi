@@ -87,11 +87,11 @@ func setup(next http.Handler) http.Handler {
 
 		// Set the kumi request context
 		rc := newRequestContext(r)
+		defer returnContext(rc)
 		if p, ok := getParams(r); ok {
 			rc.params = p
 		}
-		next.ServeHTTP(w, SetRequestContext(r, rc))
 
-		returnContext(rc)
+		next.ServeHTTP(w, setRequestContext(r, rc))
 	})
 }

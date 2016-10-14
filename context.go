@@ -22,20 +22,13 @@ const (
 
 // Context retrieves the request context.
 func Context(r *http.Request) RequestContext {
-	return FromContext(r).(RequestContext)
+	return r.Context().Value(contextKey).(RequestContext)
 }
 
-// SetRequestContext sets a custom value in kumi's Context slot.
-func SetRequestContext(r *http.Request, rc RequestContext) *http.Request {
+// setRequestContext sets a custom value in kumi's Context slot.
+func setRequestContext(r *http.Request, rc RequestContext) *http.Request {
 	ctx := context.WithValue(r.Context(), contextKey, rc)
 	return r.WithContext(ctx)
-}
-
-// FromContext allows you to create your own Context function that returns a
-// specific RequestContext type custom to your application, while still protecting
-// the context key within kumi. In that case, use FromContext instead of Context.
-func FromContext(r *http.Request) interface{} {
-	return r.Context().Value(contextKey)
 }
 
 // SetParams sets Params in the context for kumi to access. These will be
