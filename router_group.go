@@ -20,9 +20,6 @@ const (
 	OPTIONS = "OPTIONS"
 )
 
-// Handler is a generic HTTP handler.
-type Handler interface{}
-
 // Router defines an interface that allows for interchangeable routers.
 type Router interface {
 	Handle(method string, pattern string, handler http.Handler)
