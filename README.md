@@ -1,6 +1,6 @@
 # Kumi
-Kumi is a lightweight Go "framework" that packages [x/net/context](https://godoc.org/golang.org/x/net/context),
-middleware, and routing. Rather than requiring a specific router, Kumi uses a
+Kumi is a lightweight Go "framework" that packages [context](https://golang.org/pkg/context/),
+[middleware](https://github.com/justinas/alice), and routing. Rather than requiring a specific router, Kumi uses a
 router interface so you can choose the router that best suits your project.
 Kumi includes three routers by default: httprouter, httptreemux, and gorilla mux.
 
@@ -8,8 +8,6 @@ While Kumi core is light, it does ship with some middleware and functionality
 to make developing API endpoints simpler. The API response format is
 a subpackage, so you are still free to take a different approach if it makes
 more sense for your project.
-
-[docs](docs/README.md)
 
 ## Features
  * Fast routing with the flexibility to bring your own router
