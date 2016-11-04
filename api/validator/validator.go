@@ -56,13 +56,19 @@ func NewSecondary(schema gojsonschema.JSONLoader, options *Options, limit int64,
 	return v
 }
 
-// Valid validates a request against a json schema and handles error responses.
-// If the response is successful, dst will be populated.
-func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
+// Valid validates an io.Reader against a JSON schema and returns an api.Sender
+// of errors if the schema does not validate. The errors are set based
+// on the rules mapped out in the Validator.
+//
+// If the contents of the reader are valid, dst will be populated.
+// If r implements io.ReadCloser, the reader will be closed.
+func (v *Validator) Valid(dst interface{}, r io.Reader) api.Sender {
 	if dst == nil {
 		panic("dst required")
 	}
-	defer r.Body.Close()
+	if closer, ok := r.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
 
 	limit := v.Options.Limit
 	if v.Limit > 0 {
@@ -70,7 +76,7 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 	}
 
 	limitReader := limitReaderPool.Get().(*io.LimitedReader)
-	limitReader.R = r.Body
+	limitReader.R = r
 	limitReader.N = limit + 1 // extend by 1 byte, if N bytes are left to read we've hit max
 	defer limitReaderPool.Put(limitReader)
 

@@ -91,7 +91,7 @@ func BenchmarkValidator(b *testing.B) {
 		r.Header.Set("Content-Type", "application/json")
 
 		var dst schemaDest
-		v.Valid(&dst, r)
+		v.Valid(&dst, r.Body)
 	}
 }
 
@@ -232,7 +232,7 @@ func TestValidator(t *testing.T) {
 		}
 		r.Header.Set("Content-Type", "application/json")
 
-		sender := v.Valid(&tt.dst, r)
+		sender := v.Valid(&tt.dst, r.Body)
 		if sender != nil && len(tt.expect) == 0 {
 			t.Fatalf("TestValidator (%d): Expected no errors, one or more given", i)
 		} else if sender == nil && len(tt.expect) > 0 {
@@ -458,7 +458,7 @@ func TestSecondaryValidator(t *testing.T) {
 		}
 		r.Header.Set("Content-Type", "application/json")
 
-		sender := v.Valid(&dst, r)
+		sender := v.Valid(&dst, r.Body)
 		if sender != nil && len(tt.expect) == 0 {
 			t.Fatalf("TestSecondaryValidator [anyOf/oneOf/allOf] (%d): Expected no errors, one given", i)
 		} else if sender == nil && len(tt.expect) > 0 {
@@ -498,7 +498,7 @@ func TestSecondaryValidator(t *testing.T) {
 		}
 		r.Header.Set("Content-Type", "application/json")
 
-		sender := v.Valid(&dst, r)
+		sender := v.Valid(&dst, r.Body)
 		if sender != nil && len(tt.expect) == 0 {
 			t.Errorf("TestSecondaryValidator [secondary] (%d): Expected no errors, one given", i)
 		}
