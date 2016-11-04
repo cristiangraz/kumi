@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"sync"
 
 	"github.com/cristiangraz/kumi/api"
@@ -15,7 +14,7 @@ import (
 // Swapper swaps json schema errors for api errors.
 type Swapper func(errors []gojsonschema.ResultError, rules Rules) []api.Error
 
-// Validator is a JSON schema and validator. It holds a json schema,
+// Validator is a JSON schema validator. It holds a JSON schema,
 // pointer to a Validator, and optional limit for an io.LimitReader.
 type Validator struct {
 	Schema    gojsonschema.JSONLoader
@@ -27,9 +26,6 @@ type Validator struct {
 // SecondaryValidator allows for custom validation logic if the document
 // is invalid. See NewSecondaryValidator function for more details.
 type SecondaryValidator func(dst interface{}, document *JSONLoader) (result *gojsonschema.Result, sender api.Sender)
-
-// Match json.UnmarshalTypeError
-var rxUnmarshalTypeError = regexp.MustCompile(`^json: cannot unmarshal .*? into Go value of type`)
 
 // New returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
@@ -97,12 +93,7 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 				}
 				return v.Options.InvalidJSON
 			default:
-				// If not a json.UnmarshalTypeError, send InvalidJSON error.
-				// TODO: Why is Go returning an *errors.errorString rather than
-				// *json.UnmarshalTypeError that we could catch above?
-				if !rxUnmarshalTypeError.MatchString(err.Error()) {
-					return v.Options.InvalidJSON
-				}
+				return v.Options.InvalidJSON
 			}
 		}
 	}
@@ -118,8 +109,7 @@ func (v *Validator) Valid(dst interface{}, r *http.Request) api.Sender {
 		case *json.SyntaxError:
 			return v.Options.InvalidJSON
 		default:
-			// An error with the schema
-			return v.Options.BadRequest
+			return v.Options.BadRequest // An error with the schema
 		}
 	} else if result.Valid() {
 		return nil
