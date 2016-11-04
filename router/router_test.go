@@ -134,7 +134,7 @@ func testRouterNotFoundHandler(t *testing.T, router kumi.Router) {
 // A constructor for middleware that writes a "tag" to the ResponseWriter
 // for testing middleware ordering. Credit github.com/justinas/alice
 // This variation writes the tag before and after to verify middleware flow.
-func tagMiddleware(tag string) kumi.MiddlewareFn {
+func tagMiddleware(tag string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(strings.ToLower(tag)))
