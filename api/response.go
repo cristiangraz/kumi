@@ -92,9 +92,6 @@ var _ error = &ErrorResponse{}
 // statusCode should be >= 400 and <= 599
 func Failure(statusCode int, errors ...Error) *ErrorResponse {
 	code := strings.Replace(strings.ToLower(http.StatusText(statusCode)), " ", "_", -1)
-	if statusCode == 422 { // As of Go 1.7, 422 is not defined for use with StatusText
-		code = "unprocessable_entity"
-	}
 
 	return &ErrorResponse{
 		Response: &Response{

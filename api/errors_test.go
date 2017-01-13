@@ -1,16 +1,24 @@
 package api
 
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
-func TestErrors(t *testing.T) {
+func TestErrors_With(t *testing.T) {
 	Formatter = JSON
 
-	e := Error{StatusCode: http.StatusBadRequest, Type: "invalid_json", Message: "Invalid or malformed JSON"}
+	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
+	e2 := e.With(SendInput{Field: "field_name", Message: "MSG2"})
+	if !reflect.DeepEqual(e2, Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Field: "field_name", Message: "MSG2"}) {
+		t.Fatalf("unexpected error: %#v", e2)
+	}
+}
+
+func TestErrors_Send(t *testing.T) {
+	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
 
 	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
 	e.Send(rec)
@@ -21,39 +29,23 @@ func TestErrors(t *testing.T) {
 	} else if rec.Code != e.StatusCode {
 		t.Fatalf("unexpected status code: %d", rec.Code)
 	}
+}
 
-	// Set fields
-	e2 := e
-	e2.Field = "field_name"
+func TestErrors_SendWith(t *testing.T) {
+	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
 
-	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-	e2.SendWith(SendInput{Field: "field_name"}, rec)
+	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
 
-	Failure(e.StatusCode, e2).Send(expected)
-	if !bytes.Equal(rec.Body.Bytes(), expected.Body.Bytes()) {
-		t.Fatalf("unexpected response: %s", rec.Body.Bytes())
-	}
+	// Override the field and send to generate response.
+	e.SendWith(SendInput{Field: "NEW_FIELD"}, rec)
 
-	Formatter = nil
+	// Build the Failure manually to get the expected response.
+	Failure(e.StatusCode, e.With(SendInput{Field: "NEW_FIELD"})).SendFormat(expected, JSON)
 
-	// Send Format
-	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-	e.SendFormat(rec, JSON)
-	Failure(e.StatusCode, e).SendFormat(expected, JSON)
-
+	// Compare.
 	if rec.Body.String() != expected.Body.String() {
 		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
 	} else if rec.Code != e.StatusCode {
 		t.Fatalf("unexpected status code: %d", rec.Code)
-	}
-
-	e2 = e
-	e2.Field = "field_name"
-
-	rec, expected = httptest.NewRecorder(), httptest.NewRecorder()
-	e2.SendFormat(rec, XML)
-	Failure(e.StatusCode, e2).SendFormat(expected, XML)
-	if !bytes.Equal(rec.Body.Bytes(), expected.Body.Bytes()) {
-		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
 	}
 }

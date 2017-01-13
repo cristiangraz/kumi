@@ -59,8 +59,8 @@ func (e Error) SendFormat(w http.ResponseWriter, f FormatterFn) {
 	Failure(statusCode, Error{Field: e.Field, Type: e.Type, Message: e.Message}).SendFormat(w, f)
 }
 
-// With returns an api.Sender with the given fields.
-func (e Error) With(input SendInput) *ErrorResponse {
+// With returns a new Error with the given fields.
+func (e Error) With(input SendInput) Error {
 	if input.Field != "" {
 		e.Field = input.Field
 	}
@@ -68,19 +68,16 @@ func (e Error) With(input SendInput) *ErrorResponse {
 		e.Message = input.Message
 	}
 
+	return e
+}
+
+// SendWith sends the Error with the input params providing overrides.
+func (e Error) SendWith(input SendInput, w http.ResponseWriter) {
+	e = e.With(input)
 	statusCode := e.StatusCode
 	if statusCode == 0 {
 		statusCode = http.StatusBadRequest
 	}
 
-	return Failure(statusCode, Error{
-		Field:   e.Field,
-		Type:    e.Type,
-		Message: e.Message,
-	})
-}
-
-// SendWith sends the StatusError with the input params providing overrides.
-func (e Error) SendWith(input SendInput, w http.ResponseWriter) {
-	e.With(input).Send(w)
+	Failure(statusCode, Error{Field: e.Field, Type: e.Type, Message: e.Message}).Send(w)
 }
