@@ -4,10 +4,13 @@ import (
 	"crypto/tls"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/justinas/alice"
 )
+
+var once sync.Once
 
 // Engine embeds RouterGroup and provides methods to start the server.
 type Engine struct {
@@ -38,8 +41,7 @@ func (e *Engine) RunTLS(addr string, config *tls.Config) error {
 }
 
 // Serve takes one or more http.Server structs and serves those.
-// Note: The handler will be set for you if you don't provide one.
-// If you are using TLS, http2 will automatically be configured as well.
+// The handler will be set if one is not provided.
 func (e *Engine) Serve(servers ...*http.Server) error {
 	e.prep(servers...)
 
@@ -58,7 +60,9 @@ func (e *Engine) prep(servers ...*http.Server) {
 	}
 
 	if !hasHandler {
-		http.Handle("/", e.RouterGroup)
+		once.Do(func() {
+			http.Handle("/", e.RouterGroup)
+		})
 	}
 }
 
