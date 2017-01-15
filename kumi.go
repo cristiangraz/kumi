@@ -4,13 +4,10 @@ import (
 	"crypto/tls"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/justinas/alice"
 )
-
-var once sync.Once
 
 // Engine embeds RouterGroup and provides methods to start the server.
 type Engine struct {
@@ -51,18 +48,10 @@ func (e *Engine) Serve(servers ...*http.Server) error {
 // prep breaks out all of the steps of Serve except actually calling
 // gracehttp.Serve so we can test.
 func (e *Engine) prep(servers ...*http.Server) {
-	hasHandler := true
 	for _, s := range servers {
 		if s.Handler == nil {
-			hasHandler = false
-			s.Handler = http.DefaultServeMux
+			s.Handler = e.RouterGroup
 		}
-	}
-
-	if !hasHandler {
-		once.Do(func() {
-			http.Handle("/", e.RouterGroup)
-		})
 	}
 }
 
