@@ -71,6 +71,18 @@ func (e Error) With(input SendInput) Error {
 	return e
 }
 
+// WithField replaces the Field property of the error.
+func (e Error) WithField(field string) Error {
+	e.Field = field
+	return e
+}
+
+// WithMessage replaces the Field property of the error.
+func (e Error) WithMessage(msg string) Error {
+	e.Message = msg
+	return e
+}
+
 // SendWith sends the Error with the input params providing overrides.
 func (e Error) SendWith(input SendInput, w http.ResponseWriter) {
 	e = e.With(input)

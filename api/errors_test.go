@@ -17,6 +17,22 @@ func TestErrors_With(t *testing.T) {
 	}
 }
 
+func TestErrors_WithField(t *testing.T) {
+	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
+	e2 := e.WithField("NEWFIELD")
+	if !reflect.DeepEqual(e2, Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Field: "NEWFIELD", Message: "MSG"}) {
+		t.Fatalf("unexpected error: %#v", e2)
+	}
+}
+
+func TestErrors_WithMessage(t *testing.T) {
+	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
+	e2 := e.WithMessage("NEWMSG")
+	if !reflect.DeepEqual(e2, Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "NEWMSG"}) {
+		t.Fatalf("unexpected error: %#v", e2)
+	}
+}
+
 func TestErrors_Send(t *testing.T) {
 	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
 
