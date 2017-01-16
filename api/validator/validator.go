@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,7 +26,7 @@ type Validator struct {
 
 // SecondaryValidator allows for custom validation logic if the document
 // is invalid. See NewSecondaryValidator function for more details.
-type SecondaryValidator func(dst interface{}, document *JSONLoader) (result *gojsonschema.Result, sender api.Sender)
+type SecondaryValidator func(dst interface{}, document gojsonschema.JSONLoader) (result *gojsonschema.Result, sender api.Sender)
 
 // New returns a new Validator. If limit > 0, the limit overwrites
 // the limit set in the Validator.
@@ -62,7 +63,7 @@ func NewSecondary(schema gojsonschema.JSONLoader, options *Options, limit int64,
 //
 // If the contents of the reader are valid, dst will be populated.
 // If r implements io.ReadCloser, the reader will be closed.
-func (v *Validator) Valid(dst interface{}, r io.Reader) api.Sender {
+func (v *Validator) Valid(r io.Reader, dst interface{}) api.Sender {
 	if dst == nil {
 		panic("dst required")
 	}
@@ -80,9 +81,9 @@ func (v *Validator) Valid(dst interface{}, r io.Reader) api.Sender {
 	limitReader.N = limit + 1 // extend by 1 byte, if N bytes are left to read we've hit max
 	defer limitReaderPool.Put(limitReader)
 
-	decoder := json.NewDecoder(limitReader)
-	decoder.UseNumber()
-	if err := decoder.Decode(&dst); err != nil {
+	buf := new(bytes.Buffer)
+	tee := io.TeeReader(limitReader, buf)
+	if err := json.NewDecoder(tee).Decode(&dst); err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
 			return v.Options.InvalidJSON
@@ -104,11 +105,9 @@ func (v *Validator) Valid(dst interface{}, r io.Reader) api.Sender {
 		}
 	}
 
-	document := loaderPool.Get().(*JSONLoader)
-	document.dst = dst
-	document.i = nil
-	defer loaderPool.Put(document)
+	body := buf.String()
 
+	document := gojsonschema.NewStringLoader(body)
 	result, err := gojsonschema.Validate(v.Schema, document)
 	if err != nil {
 		switch err.(type) {
