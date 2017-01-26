@@ -66,6 +66,6 @@ func (router *HTTPTreeMux) MethodNotAllowedHandler(h http.Handler) {
 }
 
 // HasRoute ...
-func (router *HTTPTreeMux) HasRoute(method string, pattern string) bool {
-	return router.store.HasRoute(method, pattern)
+func (router *HTTPTreeMux) HasRoute(method string, path string) bool {
+	return router.store.HasRoute(method, path)
 }

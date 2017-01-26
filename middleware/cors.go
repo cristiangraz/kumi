@@ -31,36 +31,16 @@ type CorsOptions struct {
 	AllowHeaders []string
 }
 
-// Allow handles CORS requests by setting the appropriate
+// Cors handles CORS requests by setting the appropriate
 // response headers.
-func (opt *CorsOptions) Allow(methods ...string) func(next http.Handler) http.Handler {
-	var hasGet, hasHead, hasOptions bool
-	for _, m := range methods {
-		switch m {
-		case kumi.GET:
-			hasGet = true
-		case kumi.HEAD:
-			hasHead = true
-		case kumi.OPTIONS:
-			hasOptions = true
-		}
+func Cors(checker kumi.RouteChecker, opt *CorsOptions) func(next http.Handler) http.Handler {
+	if opt == nil {
+		panic("CORS options required")
 	}
-
-	// Add HEAD to list of allowed methods when GET is allowed.
-	if hasGet && !hasHead {
-		methods = append(methods, kumi.HEAD)
-	}
-
-	// Add OPTIONS to list of allowed methods.
-	if !hasOptions {
-		methods = append(methods, kumi.OPTIONS)
-	}
-
-	methodsStr := strings.Join(methods, ", ")
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == kumi.OPTIONS { // All OPTIONS requests should set the Allow header.
-				w.Header().Set("Allow", methodsStr)
+				w.Header().Set("Allow", allowedMethods(checker, r))
 			}
 
 			origin := r.Header.Get("Origin")
@@ -74,17 +54,24 @@ func (opt *CorsOptions) Allow(methods ...string) func(next http.Handler) http.Ha
 				return
 			}
 
+			var validOrigin bool
 			for _, ao := range opt.AllowOrigin {
-				switch ao {
-				case "*":
+				if ao == "*" {
+					validOrigin = true
 					w.Header().Set("Access-Control-Allow-Origin", origin) // Mirror the origin
-				case origin:
+					break
+				} else if ao == origin {
+					validOrigin = true
 					w.Header().Set("Vary", "Origin")
-					w.Header().Set("Access-Control-Allow-Origin", ao)
-				default:
-					next.ServeHTTP(w, r)
-					return
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					break
 				}
+			}
+
+			// If there is no valid origin match, continue.
+			if !validOrigin {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			if len(opt.AllowHeaders) > 0 {
@@ -108,7 +95,7 @@ func (opt *CorsOptions) Allow(methods ...string) func(next http.Handler) http.Ha
 
 			// For OPTIONS requests, don't continue to next middleware
 			if r.Method == kumi.OPTIONS {
-				w.Header().Set("Access-Control-Allow-Methods", methodsStr)
+				w.Header().Set("Access-Control-Allow-Methods", allowedMethods(checker, r))
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -117,4 +104,14 @@ func (opt *CorsOptions) Allow(methods ...string) func(next http.Handler) http.Ha
 		}
 		return http.HandlerFunc(fn)
 	}
+}
+
+func allowedMethods(checker kumi.RouteChecker, req *http.Request) string {
+	methods := make([]string, 0, len(kumi.HTTPMethods))
+	for _, method := range kumi.HTTPMethods {
+		if checker.HasRoute(method, req.URL.Path) {
+			methods = append(methods, method)
+		}
+	}
+	return strings.Join(methods, ", ")
 }

@@ -66,7 +66,7 @@ func (router *HTTPRouter) MethodNotAllowedHandler(h http.Handler) {
 
 // HasRoute returns true if the router has registered a route with that
 // method and pattern.
-func (router *HTTPRouter) HasRoute(method string, pattern string) bool {
-	h, _, _ := router.router.Lookup(method, pattern)
+func (router *HTTPRouter) HasRoute(method string, path string) bool {
+	h, _, _ := router.router.Lookup(method, path)
 	return h != nil
 }

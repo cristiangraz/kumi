@@ -15,12 +15,12 @@ import (
 
 func TestCors(t *testing.T) {
 	tests := []struct {
-		options      *middleware.CorsOptions
-		reqHeaders   map[string]string
-		method       string
-		allowMethods []string
-		headers      map[string]string
-		statusCode   int
+		options    *middleware.CorsOptions // the cors config
+		reqHeaders map[string]string       // the request headers to send
+		handlers   []string                // the HTTP methods that should be registered for handling
+		method     string                  // the http method to request
+		headers    map[string]string       // expected headers
+		statusCode int                     // expected status code
 	}{
 		{
 			// No Cors Response when no config
@@ -90,12 +90,12 @@ func TestCors(t *testing.T) {
 				"Origin":                        "http://kumi.io",
 				"Access-Control-Request-Method": "PUT",
 			},
-			method:       "OPTIONS",
-			allowMethods: []string{"PUT", "DELETE"},
+			method:   "OPTIONS",
+			handlers: []string{"PUT", "DELETE"},
 			headers: map[string]string{
 				"Vary": "Origin",
 				"Access-Control-Allow-Origin":      "http://kumi.io",
-				"Access-Control-Allow-Methods":     "PUT, DELETE, OPTIONS",
+				"Access-Control-Allow-Methods":     "PUT, OPTIONS, DELETE",
 				"Access-Control-Allow-Headers":     "",
 				"Access-Control-Allow-Credentials": "",
 				"Access-Control-Max-Age":           "",
@@ -113,12 +113,12 @@ func TestCors(t *testing.T) {
 				"Access-Control-Request-Method":  "GET",
 				"Access-Control-Request-Headers": "origin",
 			},
-			method:       "OPTIONS",
-			allowMethods: []string{"GET", "POST"},
+			method:   "OPTIONS",
+			handlers: []string{"GET", "POST"},
 			headers: map[string]string{
 				"Vary": "Origin",
 				"Access-Control-Allow-Origin":      "http://kumi.io",
-				"Access-Control-Allow-Methods":     "GET, POST, HEAD, OPTIONS",
+				"Access-Control-Allow-Methods":     "GET, HEAD, POST, OPTIONS",
 				"Access-Control-Allow-Headers":     "Origin",
 				"Access-Control-Allow-Credentials": "",
 				"Access-Control-Max-Age":           "",
@@ -136,12 +136,12 @@ func TestCors(t *testing.T) {
 				"Access-Control-Request-Method":  "GET",
 				"Access-Control-Request-Headers": "origin",
 			},
-			method:       "OPTIONS",
-			allowMethods: []string{"GET", "POST"},
+			method:   "OPTIONS",
+			handlers: []string{"GET", "POST"},
 			headers: map[string]string{
 				"Vary": "Origin",
 				"Access-Control-Allow-Origin":      "http://kumi.io",
-				"Access-Control-Allow-Methods":     "GET, POST, HEAD, OPTIONS",
+				"Access-Control-Allow-Methods":     "GET, HEAD, POST, OPTIONS",
 				"Access-Control-Allow-Headers":     "origin",
 				"Access-Control-Allow-Credentials": "",
 				"Access-Control-Max-Age":           "",
@@ -198,8 +198,8 @@ func TestCors(t *testing.T) {
 				"Origin":                        "http://kumi.io",
 				"Access-Control-Request-Method": "GET",
 			},
-			method:       "OPTIONS",
-			allowMethods: []string{"GET"},
+			method:   "OPTIONS",
+			handlers: []string{"GET"},
 			headers: map[string]string{
 				"Allow": "GET, HEAD, OPTIONS",
 				"Vary":  "Origin",
@@ -220,8 +220,8 @@ func TestCors(t *testing.T) {
 				"Origin":                        "http://kumi.io",
 				"Access-Control-Request-Method": "GET",
 			},
-			method:       "OPTIONS",
-			allowMethods: []string{"GET", "HEAD", "OPTIONS"},
+			method:   "OPTIONS",
+			handlers: []string{"GET"},
 			headers: map[string]string{
 				"Allow": "GET, HEAD, OPTIONS",
 				"Vary":  "",
@@ -238,9 +238,9 @@ func TestCors(t *testing.T) {
 			options: &middleware.CorsOptions{
 				AllowOrigin: []string{"*"},
 			},
-			reqHeaders:   map[string]string{},
-			method:       "OPTIONS",
-			allowMethods: []string{"GET"},
+			reqHeaders: map[string]string{},
+			method:     "OPTIONS",
+			handlers:   []string{"GET"},
 			headers: map[string]string{
 				"Allow": "GET, HEAD, OPTIONS",
 				"Vary":  "",
@@ -255,6 +255,8 @@ func TestCors(t *testing.T) {
 		},
 	}
 
+	h := func(w http.ResponseWriter, r *http.Request) {}
+
 	for i, tt := range tests {
 		w := httptest.NewRecorder()
 		r := MustNewRequest(tt.method, "/", nil)
@@ -262,14 +264,33 @@ func TestCors(t *testing.T) {
 			r.Header.Add(k, v)
 		}
 
-		k := kumi.New(router.NewHTTPRouter())
+		rtr := router.NewHTTPRouter()
+		k := kumi.New(rtr)
 		k.AutoOptionsMethod()
-		k.Use(tt.options.Allow(tt.allowMethods...))
-		k.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == kumi.OPTIONS {
-				t.Fatalf("(%d) handler should not run", i)
+		k.Use(middleware.Cors(rtr, tt.options))
+
+		if len(tt.handlers) == 0 {
+			tt.handlers = []string{tt.method}
+		}
+
+		for _, method := range tt.handlers {
+			switch method {
+			case kumi.GET:
+				k.Get("/", h)
+			case kumi.HEAD:
+				k.Head("/", h)
+			case kumi.POST:
+				k.Post("/", h)
+			case kumi.PUT:
+				k.Put("/", h)
+			case kumi.PATCH:
+				k.Patch("/", h)
+			case kumi.OPTIONS:
+				k.Options("/", h)
+			case kumi.DELETE:
+				k.Delete("/", h)
 			}
-		})
+		}
 		k.ServeHTTP(w, r)
 
 		resHeaders := w.Header()
@@ -286,17 +307,17 @@ func TestCors(t *testing.T) {
 }
 
 func TestCors_Preflight(t *testing.T) {
-	mw := (&middleware.CorsOptions{
-		AllowOrigin: []string{"*"},
-	}).Allow(kumi.GET)
-
 	w := httptest.NewRecorder()
 	r := MustNewRequest("OPTIONS", "/", nil)
 	r.Header.Set("Origin", "http://kumi.io")
 
-	k := kumi.New(router.NewHTTPRouter())
+	rtr := router.NewHTTPRouter()
+	k := kumi.New(rtr)
 	k.AutoOptionsMethod()
-	k.Group(mw).Get("/", func(w http.ResponseWriter, r *http.Request) {
+	k.Use(middleware.Cors(rtr, &middleware.CorsOptions{
+		AllowOrigin: []string{"*"},
+	}))
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("hello"))
 	})
 	k.ServeHTTP(w, r)
@@ -321,6 +342,52 @@ func TestCors_Preflight(t *testing.T) {
 		if actual := strings.Join(resHeaders[name], ", "); actual != value {
 			t.Errorf("TestCorsPreflight: Invalid header %q, wanted %q, got %q", name, value, actual)
 		}
+	}
+}
+
+// Ensures multiple origins can be matched to return the correct
+// Access-Control-Allow-Origin.
+func TestCors_MultipleOrigins(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := MustNewRequest("OPTIONS", "/", nil)
+	r.Header.Set("Origin", "http://bar.com")
+
+	rtr := router.NewHTTPRouter()
+	k := kumi.New(rtr)
+	k.AutoOptionsMethod()
+	k.Use(middleware.Cors(rtr, &middleware.CorsOptions{
+		AllowOrigin: []string{"http://foo.com", "http://bar.com"},
+	}))
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("hello"))
+	})
+	k.ServeHTTP(w, r)
+
+	if h := w.Header().Get("Access-Control-Allow-Origin"); h != "http://bar.com" {
+		t.Fatalf("unexpected access control allow orign: %s", h)
+	}
+}
+
+// Ensures no Access-Control-Allow-Origin is set the the Origin sent is
+// not in the list of allowed origins.
+func TestCors_OriginNotFound(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := MustNewRequest("OPTIONS", "/", nil)
+	r.Header.Set("Origin", "http://other.com")
+
+	rtr := router.NewHTTPRouter()
+	k := kumi.New(rtr)
+	k.AutoOptionsMethod()
+	k.Use(middleware.Cors(rtr, &middleware.CorsOptions{
+		AllowOrigin: []string{"http://foo.com", "http://bar.com"},
+	}))
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("hello"))
+	})
+	k.ServeHTTP(w, r)
+
+	if h := w.Header().Get("Access-Control-Allow-Origin"); h != "" {
+		t.Fatalf("unexpected access control allow orign: %s", h)
 	}
 }
 

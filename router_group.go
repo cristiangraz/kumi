@@ -20,8 +20,16 @@ const (
 	OPTIONS = "OPTIONS"
 )
 
+// RouteChecker checks to see if the router has a matching route
+// for a given method and path.
+type RouteChecker interface {
+	HasRoute(method string, path string) bool
+}
+
 // Router defines an interface that allows for interchangeable routers.
 type Router interface {
+	RouteChecker
+
 	Handle(method string, pattern string, handler http.Handler)
 	ServeHTTP(http.ResponseWriter, *http.Request)
 	NotFoundHandler(http.Handler)
@@ -30,12 +38,13 @@ type Router interface {
 	// responses. The router is responsible for setting the Allow response
 	// header here.
 	MethodNotAllowedHandler(http.Handler)
-	HasRoute(method string, pattern string) bool
 }
 
 // RouterGroup wraps the Router interface to provide route grouping by
 // a base pattern path and shared middleware.
 type RouterGroup interface {
+	RouteChecker
+
 	// Group generates a new RouterGroup from the current RouterGroup that
 	// shares middleware. Any middleware appended to the
 	// group will be appended to it's parent's middleware.
@@ -220,6 +229,12 @@ func (g *routerGroup) MethodNotAllowedHandler(handler http.HandlerFunc) {
 // automatically created with an OPTIONS route.
 func (g *routerGroup) AutoOptionsMethod() {
 	g.autoOptionsMethod = true
+}
+
+// HasRoute checks to see if the router has a matching route
+// for that method and path.
+func (g *routerGroup) HasRoute(method string, path string) bool {
+	return g.router.HasRoute(method, path)
 }
 
 // ServeHTTP ...

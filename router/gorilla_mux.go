@@ -95,6 +95,6 @@ func (router *GorillaMuxRouter) getMethods(r *http.Request) (methods []string) {
 
 // HasRoute returns true if the router has registered a route with that
 // method and pattern.
-func (router *GorillaMuxRouter) HasRoute(method string, pattern string) bool {
-	return router.store.HasRoute(method, pattern)
+func (router *GorillaMuxRouter) HasRoute(method string, path string) bool {
+	return router.store.HasRoute(method, path)
 }
