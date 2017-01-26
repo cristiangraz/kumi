@@ -85,10 +85,9 @@ type RouterGroup interface {
 	// but not for the requested HTTP method.
 	MethodNotAllowedHandler(http.HandlerFunc)
 
-	// SetCors sets a middleware to handle CORS headers.
-	// This ensures OPTIONS endpoints are automatically created if not defined,
-	// and that NotFound endpoints return CORS headers.
-	SetCors(func(http.Handler) http.Handler)
+	// AutoOptionsMethod enables functionality so that all routes are
+	// automatically created with an OPTIONS route.
+	AutoOptionsMethod()
 
 	// ServeHTTP implements the http.Handler interface.
 	ServeHTTP(http.ResponseWriter, *http.Request)
@@ -96,10 +95,10 @@ type RouterGroup interface {
 
 // routerGroup implements RouterGroup.
 type routerGroup struct {
-	pattern    string
-	router     Router
-	middleware alice.Chain
-	cors       func(http.Handler) http.Handler
+	pattern           string
+	router            Router
+	middleware        alice.Chain
+	autoOptionsMethod bool
 }
 
 var _ RouterGroup = &routerGroup{}
@@ -113,8 +112,9 @@ func (g *routerGroup) Group(middleware ...func(http.Handler) http.Handler) Route
 	}
 
 	return &routerGroup{
-		router:     g.router,
-		middleware: g.middleware.Append(c...),
+		router:            g.router,
+		middleware:        g.middleware.Append(c...),
+		autoOptionsMethod: g.autoOptionsMethod,
 	}
 }
 
@@ -127,9 +127,10 @@ func (g *routerGroup) GroupPath(pattern string, middleware ...func(http.Handler)
 	}
 
 	return &routerGroup{
-		pattern:    pattern,
-		router:     g.router,
-		middleware: g.middleware.Append(c...),
+		pattern:           pattern,
+		router:            g.router,
+		middleware:        g.middleware.Append(c...),
+		autoOptionsMethod: g.autoOptionsMethod,
 	}
 }
 
@@ -191,6 +192,9 @@ func (g *routerGroup) Delete(pattern string, handler http.HandlerFunc) {
 // Note HEAD/OPTIONS are set in the handle method automatically.
 func (g *routerGroup) All(pattern string, handler http.HandlerFunc) {
 	for _, method := range HTTPMethods {
+		if g.autoOptionsMethod && method == OPTIONS {
+			continue
+		}
 		g.handle(method, pattern, handler)
 	}
 }
@@ -200,11 +204,6 @@ func (g *routerGroup) All(pattern string, handler http.HandlerFunc) {
 // should run on a not found request. You can optionally set to false and
 // include a custom middleware chain in the handlers parameters.
 func (g *routerGroup) NotFoundHandler(handler http.HandlerFunc) {
-	// TODO: If middleware is inherited, won't this run automatically?
-	if g.cors != nil {
-		g.router.NotFoundHandler(g.middleware.Append(alice.Constructor(g.cors)).ThenFunc(handler))
-		return
-	}
 	g.router.NotFoundHandler(g.middleware.ThenFunc(handler))
 }
 
@@ -217,12 +216,10 @@ func (g *routerGroup) MethodNotAllowedHandler(handler http.HandlerFunc) {
 	g.router.MethodNotAllowedHandler(g.middleware.ThenFunc(handler))
 }
 
-// SetCors sets the func(http.Handler) http.Handler that handles CORS headers.
-// This is registered independendently so kumi can handle some CORS
-// conveniences for the application (creating OPTIONS routes and running
-// CORS on 404 requests).
-func (g *routerGroup) SetCors(m func(http.Handler) http.Handler) {
-	g.cors = m
+// AutoOptionsMethod enables functionality so that all routes are
+// automatically created with an OPTIONS route.
+func (g *routerGroup) AutoOptionsMethod() {
+	g.autoOptionsMethod = true
 }
 
 // ServeHTTP ...
@@ -248,7 +245,7 @@ func (g *routerGroup) handle(method, pattern string, handler http.HandlerFunc) {
 	}
 
 	// Add OPTIONS to all CORS routes if no route is already defined.
-	if g.cors != nil && method != OPTIONS && !g.router.HasRoute(OPTIONS, pattern) {
+	if g.autoOptionsMethod && method != OPTIONS && !g.router.HasRoute(OPTIONS, pattern) {
 		g.router.Handle(OPTIONS, pattern, h)
 	}
 }

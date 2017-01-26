@@ -260,6 +260,62 @@ func TestRouterGroup_All(t *testing.T) {
 	}
 }
 
+// Tests that enabling cors automatically creates OPTIONs headers.
+func TestRouterGroup_Cors(t *testing.T) {
+	var ran bool
+	k := kumi.New(&Router{})
+	k.AutoOptionsMethod()
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("OPTIONS", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	}
+}
+
+// Tests that enabling cors automatically creates OPTIONs headers.
+// This verifies that creating a group will maintain the cors setting.
+func TestRouterGroup_Cors_Group(t *testing.T) {
+	var ran bool
+	k := kumi.New(&Router{})
+	k.AutoOptionsMethod()
+	k.Group().Get("/", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("OPTIONS", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	}
+}
+
+// Tests that enabling cors automatically creates OPTIONs headers.
+// This verifies that creating a group will maintain the cors setting.
+func TestRouterGroup_Cors_GroupPath(t *testing.T) {
+	var ran bool
+	k := kumi.New(&Router{})
+	k.AutoOptionsMethod()
+	k.GroupPath("/a").Get("/b", func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+	})
+
+	r, _ := http.NewRequest("OPTIONS", "/a/b", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if ran != true {
+		t.Fatalf("handler did not run")
+	}
+}
+
 func TestRouterGroup_HeadRequestUseBodylessWriter(t *testing.T) {
 	var ran bool
 	k := kumi.New(&Router{})
