@@ -34,13 +34,13 @@ func TestErrors_WithMessage(t *testing.T) {
 }
 
 func TestErrors_Send(t *testing.T) {
-	e := Error{StatusCode: http.StatusBadRequest, Type: "TYPE", Message: "MSG"}
+	e := Error{StatusCode: http.StatusBadRequest, Field: "FIELD", Type: "TYPE", Message: "MSG"}
 
 	rec, expected := httptest.NewRecorder(), httptest.NewRecorder()
 	e.Send(rec)
 	Failure(e.StatusCode, e).SendFormat(expected, JSON)
 
-	if rec.Body.String() != expected.Body.String() {
+	if rec.Body.String() != `{"success":false,"status":400,"code":"bad_request","errors":[{"field":"FIELD","type":"TYPE","message":"MSG"}]}`+"\n" {
 		t.Fatalf("unexpected response: %s %s", rec.Body.Bytes(), expected.Body.Bytes())
 	} else if rec.Code != e.StatusCode {
 		t.Fatalf("unexpected status code: %d", rec.Code)

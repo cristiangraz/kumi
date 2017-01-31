@@ -46,7 +46,7 @@ func (e Error) Send(w http.ResponseWriter) {
 		statusCode = http.StatusBadRequest
 	}
 
-	Failure(statusCode, Error{Type: e.Type, Message: e.Message}).Send(w)
+	Failure(statusCode, Error{Field: e.Field, Type: e.Type, Message: e.Message}).Send(w)
 }
 
 // SendFormat sends the StatusError with no field.
