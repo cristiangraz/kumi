@@ -4,21 +4,13 @@ import (
 	"compress/gzip"
 	"io"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 )
 
-type (
-	gzipResponseWriter struct {
-		http.ResponseWriter
-		writer io.Writer
-	}
-
-	// An encoding is a supported content coding.
-	encoding int
-)
+// An encoding is a supported content coding.
+type encoding int
 
 const (
 	encIdentity encoding = iota
@@ -29,23 +21,16 @@ const (
 var (
 	gzipWriterPools = map[int]*sync.Pool{}
 
-	rxExtension = regexp.MustCompile(`\.((?:min\.)?[a-zA-Z]{2,4})$`)
-
-	CompressibleExtensions = map[string]struct{}{
-		"html":    {},
-		"js":      {},
-		"min.js":  {},
-		"css":     {},
-		"min.css": {},
-		"txt":     {},
-		"xml":     {},
-		"json":    {},
-		"svg":     {},
+	compressibleContentTypes = map[string]struct{}{
+		"text/plain":             {},
+		"text/html":              {},
+		"text/css":               {},
+		"text/javascript":        {},
+		"application/javascript": {},
+		"application/atom+xml":   {},
+		"application/json":       {},
+		"image/svg+xml":          {},
 	}
-
-	acceptEncoding  = "Accept-Encoding"
-	contentEncoding = "Content-Encoding"
-	vary            = "Vary"
 )
 
 func init() {
@@ -59,11 +44,6 @@ func init() {
 	}
 }
 
-// Write writes to the gzip response writer if the response is compressible.
-func (gzw gzipResponseWriter) Write(p []byte) (int, error) {
-	return gzw.writer.Write(p)
-}
-
 // Compressor middleware with default compression.
 // Use CompressorLevel to set a different compression level.
 var Compressor = CompressorLevel(gzip.DefaultCompression)
@@ -71,12 +51,15 @@ var Compressor = CompressorLevel(gzip.DefaultCompression)
 // CompressorLevel returns gzip compressable middleware using a given
 // gzip level.
 func CompressorLevel(level int) func(http.Handler) http.Handler {
-	if level != gzip.NoCompression && level != gzip.BestSpeed && level != gzip.BestCompression && level != gzip.DefaultCompression {
-		panic("Invalid compressor level.")
+	switch level {
+	case gzip.NoCompression, gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression:
+		// OK
+	default:
+		panic("invalid compressor level")
 	}
 
 	return func(next http.Handler) http.Handler {
-		fn := func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// check client's accepted encodings
 			if encs := acceptedEncodings(r); len(encs) == 0 {
 				w.WriteHeader(http.StatusNotAcceptable)
@@ -84,61 +67,21 @@ func CompressorLevel(level int) func(http.Handler) http.Handler {
 			} else if encs[0] != encGzip {
 				next.ServeHTTP(w, r)
 				return
-			} else if strings.Contains(w.Header().Get("Content-Encoding"), "gzip") { // Don't double-encode
-				next.ServeHTTP(w, r)
-				return
 			}
 
-			// If there is a file extension and it doesn't match compressible
-			// extensions, skip
-			if exts := rxExtension.FindStringSubmatch(r.URL.Path); len(exts) == 0 {
-				next.ServeHTTP(w, r)
-				return
-			} else if len(exts) == 1 {
-				ext := exts[0]
-				if _, ok := CompressibleExtensions[ext]; !ok {
-					next.ServeHTTP(w, r)
-					return
-				}
+			// Create a response writer that will defer it's decision to
+			// write gzipped content until the Content-Type header
+			// can be inspected.
+			gzipWriter := &lazyCompressResponseWriter{
+				ResponseWriter: w,
+				w:              w,
+				level:          level,
 			}
+			defer gzipWriter.Close()
 
-			// cannot accept Range requests for possibly gzipped responses
-			r.Header.Del("Range")
-
-			w.Header().Set("Vary", "Accept-Encoding")
-			setCompressionHeaders(w.Header())
-
-			gzw := gzipWriterPools[level].Get().(*gzip.Writer)
-			gzw.Reset(w)
-
-			w = &gzipResponseWriter{w, gzw}
-			next.ServeHTTP(w, r)
-
-			gzw.Close()
-			gzipWriterPools[level].Put(gzw)
-		}
-		return http.HandlerFunc(fn)
+			next.ServeHTTP(gzipWriter, r)
+		})
 	}
-}
-
-// Compress ...
-func Compress(r io.Reader, w io.Writer) {
-	level := gzip.DefaultCompression
-
-	gzw := gzipWriterPools[level].Get().(*gzip.Writer)
-	gzw.Reset(w)
-
-	io.Copy(gzw, r)
-
-	gzw.Close()
-	gzipWriterPools[level].Put(gzw)
-}
-
-// Decompress ...
-func Decompress(r io.Reader, w io.Writer) {
-	gzr, _ := gzip.NewReader(r)
-	io.Copy(w, gzr)
-	gzr.Close()
 }
 
 // AcceptsEncoding ...
@@ -149,13 +92,6 @@ func AcceptsEncoding(r *http.Request) bool {
 		return false
 	}
 	return true
-}
-
-// SetHeaders sets gzip headers.
-func setCompressionHeaders(h http.Header) {
-	h.Set(contentEncoding, "gzip")
-	h.Del("Content-Length")
-	h.Del("Accept-Ranges")
 }
 
 // acceptedEncodings returns the supported content codings that are
@@ -215,4 +151,69 @@ func acceptedEncodings(r *http.Request) []encoding {
 	default:
 		return []encoding{encGzip, encIdentity}
 	}
+}
+
+type lazyCompressResponseWriter struct {
+	http.ResponseWriter
+	w     io.Writer
+	level int
+
+	wroteHeader  bool // whether or not WriteHeader has been called
+	compressable bool // whether or not the response can be compressed
+}
+
+// WriteHeader determines if the compressor should be used and writes
+// the http status code.
+func (w *lazyCompressResponseWriter) WriteHeader(code int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	defer w.ResponseWriter.WriteHeader(code)
+
+	// Use text/plain content-type if one is not provided.
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "text/plain")
+	}
+
+	var contentType string
+	parts := strings.Split(w.Header().Get("Content-Type"), ";")
+	if len(parts) > 0 {
+		contentType = parts[0]
+	}
+
+	if _, ok := compressibleContentTypes[contentType]; !ok {
+		return
+	} else if strings.Contains(w.Header().Get("Content-Encoding"), "gzip") { // Don't double-encode
+		return
+	}
+
+	// Compressible. Use gzip.Writer.
+	gzw := gzipWriterPools[w.level].Get().(*gzip.Writer)
+	gzw.Reset(w.ResponseWriter)
+	w.w = gzw
+
+	w.Header().Set("Vary", "Accept-Encoding")
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Del("Content-Length")
+	w.Header().Del("Accept-Ranges")
+}
+
+// Write writes to the gzip response writer if the response is compressible.
+func (w *lazyCompressResponseWriter) Write(p []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.w.Write(p)
+}
+
+// Close closes the writer.
+func (w *lazyCompressResponseWriter) Close() error {
+	if gzw, ok := w.w.(*gzip.Writer); ok {
+		gzw.Close()
+		gzipWriterPools[w.level].Put(gzw)
+	} else if c, ok := w.w.(io.WriteCloser); ok {
+		return c.Close()
+	}
+	return nil
 }
