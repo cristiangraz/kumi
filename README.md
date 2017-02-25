@@ -9,6 +9,9 @@ to make developing API endpoints simpler. The API response format is
 a subpackage, so you are still free to take a different approach if it makes
 more sense for your project.
 
+## Requirements
+Kumi requires Go 1.8+.
+
 ## Features
  * Fast routing with the flexibility to bring your own router
  * Sub-router and router groups
@@ -16,12 +19,12 @@ more sense for your project.
  * Easy access to query params and route params
  * Global middleware and middleware per route group and route
  * Middleware that executes upstream and downstream with the ability to
- stop execution of the next handler.
+ stop execution of the next handler
  * `net/http` router group with no `interface{}` types
  * API components (as optional sub-packages) for faster API development: Error handling, success responses, and validation
- * Built-in CORS handling (WIP)
+ * Built-in CORS handling
  * NotFound and MethodNotAllowed handlers
- * Graceful restarts
+ * Graceful restarts (wraps Go 1.8 [`server.Shutdown()`](https://golang.org/pkg/net/http/#Server.Shutdown) with `os.Signal` handling
 
 ## API Validation With JSON schema
 Examples TBD.
