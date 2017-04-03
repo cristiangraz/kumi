@@ -91,11 +91,16 @@ func (e *Engine) Serve(config *ServeConfig) error {
 	}
 
 	// Run servers.
-	for i, server := range config.Servers {
-		if server.Server.Handler == nil {
+	errch := make(chan error)
+	for i := range config.Servers {
+		if config.Servers[i].Server.Handler == nil {
 			config.Servers[i].Server.Handler = e.RouterGroup
 		}
-		go server.serve()
+		go func(server Server) {
+			if err := server.serve(); err != nil {
+				errch <- err
+			}
+		}(config.Servers[i])
 	}
 
 	// Wait for signal.
@@ -107,12 +112,14 @@ func (e *Engine) Serve(config *ServeConfig) error {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	select {
+	case err := <-errch:
+		return err
 	case <-graceful: // Signal received. Use parent context.
 		ctx, cancel = context.WithTimeout(config.Context, config.InterruptTimeout)
 	case <-config.Context.Done(): // Context done. Stop immediately or gracefully shutdown.
 		if config.InterruptTimeout == 0 { // Stop immediately.
-			for _, server := range config.Servers {
-				server.Server.Close()
+			for i := range config.Servers {
+				config.Servers[i].Server.Close()
 			}
 			return nil
 		}
