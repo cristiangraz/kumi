@@ -255,8 +255,6 @@ func TestCors(t *testing.T) {
 		},
 	}
 
-	h := func(w http.ResponseWriter, r *http.Request) {}
-
 	for i, tt := range tests {
 		w := httptest.NewRecorder()
 		r := MustNewRequest(tt.method, "/", nil)
@@ -271,6 +269,12 @@ func TestCors(t *testing.T) {
 
 		if len(tt.handlers) == 0 {
 			tt.handlers = []string{tt.method}
+		}
+
+		h := func(w http.ResponseWriter, r *http.Request) {
+			if tt.method == "OPTIONS" {
+				t.Fatalf("(%d) did not expect handler to run on OPTIONS request", i)
+			}
 		}
 
 		for _, method := range tt.handlers {

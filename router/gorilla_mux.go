@@ -12,7 +12,6 @@ import (
 // kumi.Router interface.
 type GorillaMuxRouter struct {
 	router   *mux.Router
-	store    *Store
 	notFound http.Handler
 }
 
@@ -24,7 +23,6 @@ var _ kumi.Router = &GorillaMuxRouter{}
 func NewGorillaMuxRouter() *GorillaMuxRouter {
 	return &GorillaMuxRouter{
 		router: mux.NewRouter(),
-		store:  &Store{},
 	}
 }
 
@@ -36,8 +34,6 @@ func (router *GorillaMuxRouter) Handle(method string, pattern string, next http.
 		}
 		next.ServeHTTP(w, r)
 	}).Methods(method)
-
-	router.store.Save(method, pattern)
 }
 
 // ServeHTTP ...
@@ -79,13 +75,8 @@ func (router *GorillaMuxRouter) MethodNotAllowedHandler(next http.Handler) {
 
 // getMethods ...
 func (router *GorillaMuxRouter) getMethods(r *http.Request) (methods []string) {
-	var reqCopy http.Request
 	for _, m := range kumi.HTTPMethods {
-		reqCopy = *r
-		reqCopy.Method = m
-
-		var routeMatch mux.RouteMatch
-		if router.router.Match(&reqCopy, &routeMatch) && routeMatch.Route != nil {
+		if router.HasRoute(m, r.URL.Path) {
 			methods = append(methods, m)
 		}
 	}
@@ -95,6 +86,8 @@ func (router *GorillaMuxRouter) getMethods(r *http.Request) (methods []string) {
 
 // HasRoute returns true if the router has registered a route with that
 // method and pattern.
-func (router *GorillaMuxRouter) HasRoute(method string, path string) bool {
-	return router.store.HasRoute(method, path)
+func (router *GorillaMuxRouter) HasRoute(method string, path string) (found bool) {
+	var routeMatch mux.RouteMatch
+	req, _ := http.NewRequest(method, path, nil)
+	return router.router.Match(req, &routeMatch) && routeMatch.Route != nil
 }

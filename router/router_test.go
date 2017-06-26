@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -144,88 +145,127 @@ func tagMiddleware(tag string) func(http.Handler) http.Handler {
 	}
 }
 
-// func TestMethodNotAllowedHandlers(t *testing.T) {
-// 	routers := []struct {
-// 		name   string
-// 		router kumi.Router
-// 	}{
-// 		{
-// 			name:   "httprouter",
-// 			router: NewHTTPRouter(),
-// 		},
-// 		{
-// 			name:   "httptreemux",
-// 			router: NewHTTPTreeMux(),
-// 		},
-// 		{
-// 			name:   "gorilla",
-// 			router: NewGorillaMuxRouter(),
-// 		},
-// 	}
-//
-// 	mnah := func(c *kumi.Context) {
-// 		c.Header().Set("X-Method-Not-Allowed-Handler", "True")
-// 		c.WriteHeader(http.StatusMethodNotAllowed)
-// 	}
-//
-// 	mw := func(c *kumi.Context) {
-// 		c.Header().Set("X-Middleware-Ran", "True")
-// 		c.Next()
-// 	}
-//
-// 	expected := []string{"PATCH", "DELETE"}
-// 	for _, r := range routers {
-// 		k := kumi.New(r.router)
-//
-// 		// Set Global middleware to run
-// 		k.Use(mw)
-//
-// 		k.Get("/")
-// 		k.Post("/bla/bla")
-// 		k.Patch("/path")
-// 		k.Delete("/path")
-//
-// 		for _, inheritMiddleware := range []bool{true, false} {
-// 			// Set MethodNotAllowedHandler
-// 			k.MethodNotAllowedHandler(inheritMiddleware, mnah)
-//
-// 			rec := httptest.NewRecorder()
-// 			req, _ := http.NewRequest("GET", "/path", nil)
-//
-// 			c := k.NewContext(rec, req)
-// 			k.ServeHTTP(c, c.Request)
-// 			k.ReturnContext(c)
-//
-// 			if rec.Code != http.StatusMethodNotAllowed {
-// 				t.Errorf("TestMethodNotAllowedHandlers (%s): Expected method not allowed handler to return 405, given %d", r.name, rec.Code)
-// 			}
-//
-// 			// Ensure NFH ran
-// 			if rec.Header().Get("X-Method-Not-Allowed-Handler") != "True" {
-// 				t.Errorf("TestMethodNotAllowedHandlers (%s): Expected X-Method-Not-Allowed-Handler header", r.name)
-// 			}
-//
-// 			if rec.Header().Get("Allow") == "" {
-// 				t.Errorf("TestMethodNotAllowedHandlers (%s): Expected Allow header. None given", r.name)
-// 			}
-//
-// 			given := strings.Split(rec.Header().Get("Allow"), ", ")
-// 			if len(given) != 2 {
-// 				t.Errorf("TestmMethodNotAllowedHandlers (%s): Expected allow header with 2 methods. %d given", r.name, len(given))
-// 			}
-//
-// 			if !((given[0] == "PATCH" && given[1] == "DELETE") || (given[0] == "DELETE" && given[1] == "PATCH")) {
-// 				t.Errorf("TestMethodNotAllowedHandlers (%s): Expected allow header to contain %q, given %q", r.name, expected, given)
-// 			}
-//
-// 			// Ensure global middleware ran on NFH when inheritMiddleware = true
-// 			expectedMw := ""
-// 			if inheritMiddleware {
-// 				expectedMw = "True"
-// 			}
-// 			if rec.Header().Get("X-Middleware-Ran") != expectedMw {
-// 				t.Errorf("TestMethodNotAllowedHandlers (%s): Expected X-Middleware-Ran header", r.name)
-// 			}
-// 		}
-// 	}
-// }
+func TestMethodNotAllowedHandlers(t *testing.T) {
+	routers := []struct {
+		name   string
+		router kumi.Router
+		param  string
+	}{
+		{
+			name:   "httprouter",
+			router: router.NewHTTPRouter(),
+			param:  ":id",
+		},
+		{
+			name:   "httptreemux",
+			router: router.NewHTTPTreeMux(),
+			param:  ":id",
+		},
+		{
+			name:   "gorilla",
+			router: router.NewGorillaMuxRouter(),
+			param:  "{id}",
+		},
+	}
+
+	mw := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Middleware-Ran", "True")
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	for _, r := range routers {
+		k := kumi.New(r.router)
+
+		// Set Global middleware to run
+		k.Use(mw)
+
+		k.Get("/", func(w http.ResponseWriter, r *http.Request) {})
+		k.Post("/bla/bla", func(w http.ResponseWriter, r *http.Request) {})
+		k.Patch("/path/"+r.param, func(w http.ResponseWriter, r *http.Request) {})
+		k.Delete("/path/"+r.param, func(w http.ResponseWriter, r *http.Request) {})
+
+		// Set MethodNotAllowedHandler
+		k.MethodNotAllowedHandler(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Method-Not-Allowed-Handler", "True")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		})
+
+		req, _ := http.NewRequest("GET", "/path/10", nil)
+		w := httptest.NewRecorder()
+		k.ServeHTTP(w, req)
+
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("(%s): unexpected status code: %d", r.name, w.Code)
+		} else if w.Header().Get("X-Method-Not-Allowed-Handler") != "True" { // Ensure NFH ran
+			t.Fatalf("(%s): expected X-Method-Not-Allowed-Handler header", r.name)
+		} else if w.Header().Get("Allow") == "" {
+			t.Fatalf("(%s): expected Allow header", r.name)
+		}
+
+		a := strings.Split(w.Header().Get("Allow"), ", ")
+		sort.Strings(a)
+		if !reflect.DeepEqual(a, []string{"DELETE", "PATCH"}) {
+			t.Fatalf("(%s):unexpected methods: %#v", r.name, a)
+		}
+
+		// Ensure global middleware ran.
+		if w.Header().Get("X-Middleware-Ran") != "True" {
+			t.Fatalf("(%s): expected X-Middleware-Ran header", r.name)
+		}
+	}
+}
+
+func TestHasRoute(t *testing.T) {
+	routers := []struct {
+		name   string
+		router kumi.Router
+		param  string
+	}{
+		{
+			name:   "httprouter",
+			router: router.NewHTTPRouter(),
+			param:  ":id",
+		},
+		{
+			name:   "httptreemux",
+			router: router.NewHTTPTreeMux(),
+			param:  ":id",
+		},
+		{
+			name:   "gorilla",
+			router: router.NewGorillaMuxRouter(),
+			param:  "{id}",
+		},
+	}
+
+	for _, r := range routers {
+		k := kumi.New(r.router)
+
+		k.Get("/", func(w http.ResponseWriter, r *http.Request) {})
+		k.Post("/bla/bla", func(w http.ResponseWriter, r *http.Request) {})
+		k.Patch("/path/"+r.param, func(w http.ResponseWriter, r *http.Request) {})
+		k.Delete("/path/"+r.param, func(w http.ResponseWriter, r *http.Request) {})
+		k.Options("/path/"+r.param, func(w http.ResponseWriter, r *http.Request) {})
+
+		for _, method := range kumi.HTTPMethods {
+			switch method {
+			case "PATCH", "DELETE", "OPTIONS":
+				if !k.HasRoute(method, "/path/10") {
+					t.Errorf("(%s) expected %s to have route", r.name, method)
+				}
+			default:
+				if k.HasRoute(method, "/path/10") {
+					t.Errorf("(%s) expected %s to not have route", r.name, method)
+				}
+			}
+		}
+
+		if !k.HasRoute("GET", "/") {
+			t.Fatalf("(%s) expected route to be found", r.name)
+		} else if !k.HasRoute("POST", "/bla/bla") {
+			t.Fatalf("(%s) expected route to be found", r.name)
+		}
+	}
+}

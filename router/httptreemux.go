@@ -12,7 +12,6 @@ import (
 // kumi.Router interface.
 type HTTPTreeMux struct {
 	router *httptreemux.TreeMux
-	store  *Store
 }
 
 var _ kumi.Router = &HTTPTreeMux{}
@@ -23,7 +22,6 @@ var _ kumi.Router = &HTTPTreeMux{}
 func NewHTTPTreeMux() *HTTPTreeMux {
 	return &HTTPTreeMux{
 		router: httptreemux.New(),
-		store:  &Store{},
 	}
 }
 
@@ -35,7 +33,6 @@ func (router *HTTPTreeMux) Handle(method string, pattern string, next http.Handl
 		}
 		next.ServeHTTP(w, r)
 	})
-	router.store.Save(method, pattern)
 }
 
 // ServeHTTP ...
@@ -67,5 +64,7 @@ func (router *HTTPTreeMux) MethodNotAllowedHandler(h http.Handler) {
 
 // HasRoute ...
 func (router *HTTPTreeMux) HasRoute(method string, path string) bool {
-	return router.store.HasRoute(method, path)
+	req, _ := http.NewRequest(method, path, nil)
+	_, found := router.router.Lookup(nil, req)
+	return found
 }
