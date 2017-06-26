@@ -34,7 +34,7 @@ type responseWriter struct {
 
 var _ ResponseWriter = &responseWriter{}
 
-// WriteHeader prepares the response once.If a 204 No Content response
+// WriteHeader prepares the response once. If a 204 No Content response
 // is being sent, or the BodylessResponseWriter is in use,
 // no Content-Type header will be sent.
 func (w *responseWriter) WriteHeader(s int) {
@@ -45,12 +45,11 @@ func (w *responseWriter) WriteHeader(s int) {
 	w.status = s
 
 	if s == http.StatusNoContent {
-		w.ResponseWriter = &BodylessResponseWriter{w.ResponseWriter}
+		w.ResponseWriter = &BodylessResponseWriter{ResponseWriter: w.ResponseWriter}
 	}
 
-	if _, ok := w.ResponseWriter.(*BodylessResponseWriter); ok {
-		w.Header().Del("Content-Type")
-	} else if w.Header().Get("Content-Type") == "" {
+	// Set Content-Type header if missing and not using the BodylessResponseWriter.
+	if _, ok := w.ResponseWriter.(*BodylessResponseWriter); !ok && w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "text/plain")
 	}
 	w.ResponseWriter.WriteHeader(s)
@@ -97,15 +96,47 @@ func (w *responseWriter) Flush() {
 	}
 }
 
+var _ ResponseWriter = &BodylessResponseWriter{}
+
 // BodylessResponseWriter wraps http.ResponseWriter, discarding
 // anything written to the body.
 type BodylessResponseWriter struct {
 	http.ResponseWriter
+
+	// status holds the status code
+	status int
+
+	// wroteHeader tells whether the header's been written.
+	wroteHeader bool
+}
+
+// WriteHeader prepares the response once.If a 204 No Content response
+// is being sent, or the BodylessResponseWriter is in use,
+// no Content-Type header will be sent.
+func (w *BodylessResponseWriter) WriteHeader(s int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.status = s
+
+	w.Header().Del("Content-Type")
+	w.ResponseWriter.WriteHeader(s)
 }
 
 // Write discards anything written to the body.
-func (brw BodylessResponseWriter) Write(b []byte) (int, error) {
+func (w *BodylessResponseWriter) Write(b []byte) (int, error) {
 	return 0, nil
+}
+
+// Status returns the status code for the response.
+func (w *BodylessResponseWriter) Status() int {
+	return w.status
+}
+
+// Written returns the number of bytes written.
+func (w *BodylessResponseWriter) Written() int {
+	return 0
 }
 
 var writerPool = &sync.Pool{

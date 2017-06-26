@@ -169,7 +169,7 @@ func setup(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case HEAD:
-			w = &BodylessResponseWriter{w}
+			w = &BodylessResponseWriter{ResponseWriter: w}
 		default:
 			rw := newWriter(w)
 			w = rw

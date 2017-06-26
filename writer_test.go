@@ -76,39 +76,40 @@ func TestWriter_Written(t *testing.T) {
 
 // BodylessResponseWriter should not write body or send a Content-Type header.
 func TestWriter_NoContentUsesBodylessWriter(t *testing.T) {
-	var ran bool
 	k := kumi.New(&Router{})
+
+	var invoked bool
 	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		ran = true
+		invoked = true
 		w.Header().Set("Content-Type", "application/html")
 		w.WriteHeader(http.StatusNoContent)
-		w.Write([]byte("writing content"))
+		w.Write([]byte("writing content")) // send body to verify it's not written
 	})
 
 	r, _ := http.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 	k.ServeHTTP(w, r)
 
-	if ran != true {
+	if !invoked {
 		t.Fatalf("handler did not run")
 	} else if w.Code != http.StatusNoContent {
 		t.Fatalf("unexpected status code: %d", w.Code)
-	} else if w.Body.Len() > 0 {
+	} else if w.Body.Len() > 0 { // no body should be written
 		t.Fatalf("expected no response body: %s", w.Body.String())
-	} else if ct := w.Header().Get("Content-Type"); ct != "" {
+	} else if ct := w.Header().Get("Content-Type"); ct != "" { // content-type should be stripped
 		t.Fatalf("unexpected content-type: %s", ct)
 	}
 }
 
 func TestWriter_BodylessResponseWriter_Written(t *testing.T) {
-	var ran bool
 	k := kumi.New(&Router{})
 
+	var invoked bool
 	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		w.Write([]byte("writing content"))
 
-		ran = true
+		invoked = true
 		if rw, ok := w.(kumi.ResponseWriter); !ok {
 			t.Fatalf("expected kumi.ResponseWriter: %T", w)
 		} else if rw.Written() > 0 {
@@ -120,8 +121,38 @@ func TestWriter_BodylessResponseWriter_Written(t *testing.T) {
 	w := httptest.NewRecorder()
 	k.ServeHTTP(w, r)
 
-	if ran != true {
-		t.Fatalf("handler did not run")
+	if !invoked {
+		t.Fatalf("handler was not invoked")
+	} else if w.Body.Len() != 0 {
+		t.Fatalf("unexpected bytes written: %s", w.Body.String())
+	}
+}
+
+func TestWriter_BodylessResponseWriter_Status(t *testing.T) {
+	k := kumi.New(&Router{})
+
+	var invoked bool
+	k.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w = &kumi.BodylessResponseWriter{ResponseWriter: w}
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte("writing content"))
+
+		invoked = true
+		if rw, ok := w.(kumi.ResponseWriter); !ok {
+			t.Fatalf("expected kumi.ResponseWriter: %T", w)
+		} else if rw.Status() > http.StatusConflict {
+			t.Fatalf("expected no bytes to be written with BodylessResponseWriter, wrote %d", rw.Written())
+		}
+	})
+
+	r, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	k.ServeHTTP(w, r)
+
+	if !invoked {
+		t.Fatalf("handler was not invoked")
+	} else if w.Body.Len() != 0 {
+		t.Fatalf("unexpected bytes written: %s", w.Body.String())
 	}
 }
 
@@ -147,7 +178,7 @@ func TestWriter_SetsContentType(t *testing.T) {
 
 func TestBodyLessResponseWriter_Write(t *testing.T) {
 	w := httptest.NewRecorder()
-	bw := &kumi.BodylessResponseWriter{w}
+	bw := &kumi.BodylessResponseWriter{ResponseWriter: w}
 
 	if n, err := bw.Write([]byte("hi")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
