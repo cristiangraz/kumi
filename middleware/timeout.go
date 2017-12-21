@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // Timeout cancels context.Context after a given duration.
