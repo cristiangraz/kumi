@@ -3,6 +3,7 @@ package validator
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/cristiangraz/kumi/api"
 	"github.com/xeipuuv/gojsonschema"
@@ -28,7 +29,23 @@ func Swap(errors []gojsonschema.ResultError, rules Rules) (e []api.Error) {
 	count := len(errors)
 	used := map[string]bool{}
 	for _, err := range errors {
-		field, errType := err.Field(), err.Type()
+		details := err.Details()
+		errType := err.Type()
+
+		// Look for field in either "property" or "field" entries in the details map
+		var field string
+		if f, ok := details["property"]; ok {
+			if f, ok := f.(string); ok {
+				field = f
+			}
+		}
+		if field == "" {
+			if f, ok := details["field"]; ok {
+				if f, ok := f.(string); ok {
+					field = f
+				}
+			}
+		}
 		r, ok := rules[field]
 		if !ok {
 			// check for "global" error field
@@ -43,7 +60,7 @@ func Swap(errors []gojsonschema.ResultError, rules Rules) (e []api.Error) {
 
 			// Prevent duplicate errors for nested types
 			// TODO: tests
-			if rxNestedFields.MatchString(field) {
+			if strings.Contains(field, ".") && rxNestedFields.MatchString(field) {
 				field = rxNestedFields.ReplaceAllString(field, "$1")
 				key := fmt.Sprintf("%s_%s", field, errType)
 				if _, ok := used[key]; ok {

@@ -75,7 +75,7 @@ func testRouter(t *testing.T, rt routerTest) {
 		h := func(w http.ResponseWriter, r *http.Request) {
 			ran = true
 			if !reflect.DeepEqual(kumi.Context(r).Params(), rt.params) {
-				t.Fatalf("unexpected params: %v", kumi.Context(r).Params)
+				t.Fatalf("unexpected params: %v", kumi.Context(r).Params())
 			}
 		}
 
